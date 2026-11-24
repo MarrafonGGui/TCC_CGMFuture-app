@@ -1,0 +1,1956 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TCC — Monitoramento Glicêmico RBAC & IA Personalizada</title>
+  <link rel="stylesheet" href="/static/style.css?v=20261123_5">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    /* Garante o layout lateral e a separação entre páginas mesmo se o navegador segurar cache antigo */
+    .top-navbar-content { max-width: 100%; padding: 12px 24px; }
+    .app-workspace { display: flex; min-height: calc(100vh - 65px); background: #f8fafc; align-items: stretch; }
+    .app-sidebar {
+      width: 260px; background: #ffffff; border-right: 1px solid #e2e8f0; flex-shrink: 0;
+      display: flex; flex-direction: column; position: sticky; top: 65px; height: calc(100vh - 65px);
+      overflow-y: auto; box-sizing: border-box; padding: 18px 14px; z-index: 80;
+    }
+    .sidebar-section-title {
+      font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.06em;
+      color: #64748b; padding: 4px 10px 10px 10px;
+    }
+    .sidebar-menu-list { display: flex; flex-direction: column; gap: 6px; flex: 1; }
+    .sidebar-page-btn {
+      width: 100%; display: flex; align-items: center; gap: 10px; padding: 11px 14px;
+      border-radius: 10px; border: 1px solid transparent; background: transparent; color: #334155;
+      font-size: 14px; font-weight: 600; text-align: left; cursor: pointer; transition: all 0.15s ease;
+      font-family: inherit; box-sizing: border-box; text-decoration: none;
+    }
+    .sidebar-page-btn:hover { background: #f1f5f9; color: #0f172a; }
+    .sidebar-page-btn.active {
+      background: #eff6ff; color: #1d4ed8; border-color: #bfdbfe; font-weight: 700;
+      box-shadow: 0 2px 6px rgba(37, 99, 235, 0.08);
+    }
+    .sidebar-page-label { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .app-page-container {
+      flex: 1; min-width: 0; max-width: 1220px; margin: 0 auto; padding: 24px 28px; box-sizing: border-box;
+    }
+    .page-view { animation: pageFadeIn 0.16s ease-out; }
+    @keyframes pageFadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+    .btn-mobile-sidebar {
+      display: none; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 8px;
+      padding: 6px 10px; font-size: 13px; font-weight: 700; cursor: pointer; color: #0f172a;
+    }
+    .sidebar-mobile-backdrop {
+      display: none; position: fixed; inset: 0; background: rgba(15, 23, 42, 0.45); z-index: 140;
+    }
+    @media (max-width: 900px) {
+      .btn-mobile-sidebar { display: inline-flex; align-items: center; justify-content: center; }
+      .app-sidebar {
+        position: fixed; top: 0; left: 0; height: 100vh; z-index: 150;
+        transform: translateX(-100%); transition: transform 0.22s ease;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18);
+      }
+      .app-sidebar.mobile-open { transform: translateX(0); }
+      .sidebar-mobile-backdrop.mobile-open { display: block; }
+      .app-page-container { padding: 16px; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- Tela de login -->
+<div id="loginView" class="login-view-wrapper">
+  <div class="login-card">
+    <div class="login-brand">
+      <div class="login-icon-badge" aria-hidden="true">
+        <svg width="30" height="30" viewBox="0 0 24 24" fill="none">
+          <path d="M12 2.2C12 2.2 5.5 9.6 5.5 14.5a6.5 6.5 0 0 0 13 0C18.5 9.6 12 2.2 12 2.2Z" fill="#dc2626"/>
+          <path d="M9.2 13.8a3.4 3.4 0 0 0 2.3 3.4" stroke="rgba(255,255,255,0.7)" stroke-width="1.7" stroke-linecap="round"/>
+        </svg>
+      </div>
+      <h1>CGM Future</h1>
+      <p>Sistema clínico com controle de acesso (ADM • Médico • Paciente)</p>
+    </div>
+
+    <div id="loginAlert" class="login-alert hidden" style="margin-bottom: 16px;"></div>
+
+    <form id="loginForm" class="login-form">
+      <div class="login-field">
+        <label for="loginUsername">Nome de Usuário</label>
+        <div class="login-input-wrap">
+          <input type="text" id="loginUsername" placeholder="ex.: adm" required autofocus autocomplete="username">
+        </div>
+      </div>
+      <div class="login-field">
+        <label for="loginPassword">Senha</label>
+        <div class="login-input-wrap">
+          <input type="password" id="loginPassword" placeholder="Digite sua senha" required autocomplete="current-password">
+          <button type="button" id="btnTogglePwd" class="btn-toggle-pwd" title="Mostrar ou ocultar senha">Mostrar</button>
+        </div>
+      </div>
+      <button type="submit" id="btnLoginSubmit" class="btn-login-submit"><span>Entrar no Sistema</span></button>
+    </form>
+
+    <div class="login-demo-hint">
+      <b>Contas de demonstração:</b><br>
+      • Administrador: <code>adm</code> / <code>adm</code><br>
+      • Médico: <code>medico</code> / <code>medico</code><br>
+      • Paciente: <code>paciente</code> / <code>paciente</code>
+    </div>
+  </div>
+</div>
+
+<!-- Área autenticada -->
+<div id="appView" class="hidden">
+
+  <header class="top-navbar">
+    <div class="top-navbar-content">
+      <div class="brand-title-group">
+        <button type="button" id="btnMobileSidebar" class="btn-mobile-sidebar" title="Abrir menu">Menu</button>
+        <div class="brand-logo-icon" aria-hidden="true">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+            <path d="M12 2.2C12 2.2 5.5 9.6 5.5 14.5a6.5 6.5 0 0 0 13 0C18.5 9.6 12 2.2 12 2.2Z" fill="#dc2626"/>
+            <path d="M9.2 13.8a3.4 3.4 0 0 0 2.3 3.4" stroke="rgba(255,255,255,0.7)" stroke-width="1.7" stroke-linecap="round"/>
+          </svg>
+        </div>
+        <div class="brand-text">
+          <h1>CGM Future</h1>
+          <span>Protótipo TCC • IA Global + Personalizada por Paciente</span>
+        </div>
+      </div>
+
+      <div class="user-nav-actions">
+        <span id="headerSimpleSync" class="header-sync-pill">Sincronizado</span>
+
+        <div class="user-profile-badge">
+          <div class="user-avatar-circle" id="userAvatar">U</div>
+          <div class="user-info-text">
+            <span class="user-name-text" id="userDisplayName">Carregando...</span>
+            <span class="user-role-tag" id="userRoleBadge">—</span>
+          </div>
+        </div>
+
+        <button type="button" id="btnNavAdmin" class="btn-nav-admin adm-only">Painel ADM</button>
+        <button type="button" id="btnNavDoctor" class="btn-nav-doctor hide-for-paciente">Carteira de Pacientes</button>
+        <button type="button" id="btnNavChat" class="btn-nav-chat chat-patient-doctor-only">Mensagens <span id="navUnread" class="unread-pill hidden">0</span></button>
+        <button type="button" id="btnLogout" class="btn-nav-logout" title="Sair da conta">Sair</button>
+      </div>
+    </div>
+  </header>
+
+  <div class="app-workspace">
+
+    <!-- Menu lateral filtrado por perfil -->
+    <aside id="appSidebar" class="app-sidebar">
+      <div class="sidebar-section-title">Páginas do Sistema</div>
+      <nav id="sidebarMenu" class="sidebar-menu-list" aria-label="Menu Lateral"></nav>
+    </aside>
+
+    <div id="sidebarBackdrop" class="sidebar-mobile-backdrop"></div>
+
+    <!-- Conteúdo das páginas -->
+    <main class="app-page-container">
+      <div id="mainContent">
+
+        <!-- Página principal (/dashboard) -->
+        <div id="page-dashboard" class="page-view">
+
+          <!-- Seletor de paciente em foco para médico e administrador -->
+          <div id="activePatientBar" class="active-patient-bar hide-for-paciente">
+            <div>
+              <div style="font-size:12px; opacity:0.8;">Perfil em acompanhamento</div>
+              <div style="font-size:17px; font-weight:800;" id="activePatientName">—</div>
+            </div>
+            <label style="display:flex; align-items:center; gap:8px; font-weight:600;">
+              Trocar paciente:
+              <select id="activePatientSelect"></select>
+            </label>
+          </div>
+
+          <div id="noPatientNotice" class="empty-user-notice hidden">
+            <h3>Nenhum paciente na sua carteira</h3>
+            <p>Acesse a página <b>Carteira de pacientes</b> no menu lateral para cadastrar um paciente.</p>
+          </div>
+
+          <div id="emptyUserNotice" class="empty-user-notice hidden">
+            <h3>Ainda não há leituras para <span id="emptyUserName">este perfil</span>.</h3>
+            <p>Envie um CSV do sensor na página <b>Importação</b> ou registre leituras manuais abaixo.</p>
+          </div>
+
+          <!-- Registro manual e previsão -->
+          <section class="card">
+            <h2>Registro de Glicemia e Previsão</h2>
+            <p class="muted">Registre sua glicemia. O relógio acompanha o horário atual em tempo real; desmarque para lançar uma medição retroativa.</p>
+
+            <div class="clock-toolbar">
+              <label class="checkbox-label"><input type="checkbox" id="chkLiveClock" checked> Usar horário atual (tempo real)</label>
+              <span id="clockPill" class="clock-live-pill">Ao vivo</span>
+            </div>
+
+            <div class="manual-grid">
+              <label>Data e horário da medição
+                <input id="manualTimestamp" type="datetime-local" step="1">
+              </label>
+              <label>Glicose atual (mg/dL) *
+                <input id="g0" type="number" min="20" max="600" step="1" placeholder="ex.: 150">
+              </label>
+              <label class="hide-for-paciente">Glicose há 15 min (opcional)
+                <input id="g15" type="number" min="20" max="600" step="1" placeholder="usa o histórico">
+              </label>
+              <label class="hide-for-paciente">Glicose há 30 min (opcional)
+                <input id="g30" type="number" min="20" max="600" step="1" placeholder="usa o histórico">
+              </label>
+            </div>
+
+            <div class="manual-actions">
+              <button id="btnPredict" class="btn-primary" type="button">Registrar e prever</button>
+            </div>
+            <div id="manualStatus" style="margin-top: 12px; font-weight: 500;"></div>
+
+            <div class="prediction-grid">
+              <div class="prediction interactive-pred" id="cardPred15" role="button" tabindex="0" title="Clique para confirmar esta previsão como exata">
+                <small>Previsão em +15 minutos <span class="hide-for-paciente">(<span id="p15Model">—</span>)</span></small>
+                <b id="p15">—</b>
+                <span>mg/dL</span>
+                <span class="pred-feedback-cta" id="cta15">Marcar como exata</span>
+              </div>
+              <div class="prediction interactive-pred" id="cardPred30" role="button" tabindex="0" title="Clique para confirmar esta previsão como exata">
+                <small>Previsão em +30 minutos <span class="hide-for-paciente">(<span id="p30Model">—</span>)</span></small>
+                <b id="p30">—</b>
+                <span>mg/dL</span>
+                <span class="pred-feedback-cta" id="cta30">Marcar como exata</span>
+              </div>
+            </div>
+            <p class="muted" style="margin-top:8px; font-size:12.5px;">Após medir sua glicose real em +15 ou +30 min, clique no card correspondente para confirmar a previsão. A confirmação ajusta a IA personalizada.</p>
+
+            <div class="card-inner">
+              <h3>Leituras manuais registradas</h3>
+              <div style="overflow-x:auto;" id="manualHistory"><p class="muted">Nenhuma leitura manual.</p></div>
+            </div>
+
+            <div class="card-inner">
+              <h3>Histórico de previsões vs. leituras reais</h3>
+              <div style="overflow-x:auto;" id="predictionLogsList"><p class="muted">Nenhuma previsão registrada.</p></div>
+            </div>
+          </section>
+
+          <!-- Indicadores clínicos, curva diária e resumo do modelo -->
+          <section id="out">
+            <div id="cards" class="grid"></div>
+
+            <div class="card" id="chartCard">
+              <div class="chart-header">
+                <div>
+                  <h2 id="chartTitle">Histórico diário (intervalos de 15 min)</h2>
+                  <p class="muted" id="chartSubtitle">Curva glicêmica a cada 15 minutos no dia selecionado.</p>
+                </div>
+                <div class="chart-view-toggle">
+                  <button type="button" id="viewDailyBtn" class="btn-toggle active">Visão diária</button>
+                  <button type="button" id="viewFullBtn" class="btn-toggle">Período completo</button>
+                </div>
+              </div>
+              <div id="dailyControls" class="day-picker-container">
+                <div class="day-picker-row">
+                  <button type="button" id="prevDayBtn" class="btn-nav">Dia anterior</button>
+                  <div class="day-select-wrapper"><select id="daySelect" class="day-select" aria-label="Escolher dia"></select></div>
+                  <button type="button" id="nextDayBtn" class="btn-nav">Próximo dia</button>
+                </div>
+                <div class="day-metrics-strip">
+                  <div class="day-metric-chip"><span class="chip-label">Média</span><span class="chip-val" id="dayMean">—</span></div>
+                  <div class="day-metric-chip"><span class="chip-label">TIR</span><span class="chip-val chip-tir" id="dayTIR">—</span></div>
+                  <div class="day-metric-chip"><span class="chip-label">Mín / Máx</span><span class="chip-val" id="dayMinMax">—</span></div>
+                  <div class="day-metric-chip"><span class="chip-label">TAR (&gt;180)</span><span class="chip-val" id="dayTAR">—</span></div>
+                  <div class="day-metric-chip"><span class="chip-label">TBR (&lt;70)</span><span class="chip-val" id="dayTBR">—</span></div>
+                  <div class="day-metric-chip"><span class="chip-label">Leituras</span><span class="chip-val" id="dayCount">—</span></div>
+                </div>
+              </div>
+              <div class="chart-wrapper"><canvas id="chart"></canvas></div>
+            </div>
+
+            <div class="card hide-for-paciente">
+              <h2>Qualidade e cobertura dos dados</h2>
+              <div id="quality" class="muted">Sem leituras registradas para cálculo de qualidade.</div>
+              <div id="sessions" style="margin-top:12px;"></div>
+            </div>
+
+            <div class="card hide-for-paciente" id="doctorAiSummary">
+              <h2>IA personalizada do paciente</h2>
+              <p class="muted">Carregando status do modelo personalizado...</p>
+            </div>
+          </section>
+
+        </div>
+
+        <!-- Carteira de pacientes (/carteira-pacientes) -->
+        <div id="page-patients" class="page-view hidden">
+
+          <section id="doctorPanel" class="doctor-panel-card">
+            <h2>Carteira de Pacientes</h2>
+            <p class="muted">Cadastre, edite e exclua pacientes vinculados à sua carteira e selecione quem deseja acompanhar.</p>
+
+            <div class="admin-grid-layout">
+              <div class="admin-create-form">
+                <h3 id="docFormTitle" style="margin-top:0;">Novo Paciente</h3>
+                <div id="docAlert" class="hidden" style="padding:8px 10px; border-radius:6px; font-size:12.5px; font-weight:600;"></div>
+                <form id="docPatientForm" style="display:flex; flex-direction:column; gap:10px;">
+                  <input type="hidden" id="docEditId">
+                  <div class="admin-input-row"><label for="docUsername">Login *</label><input type="text" id="docUsername" required></div>
+                  <div class="admin-input-row"><label for="docFullName">Nome completo</label><input type="text" id="docFullName"></div>
+                  <div class="admin-input-row"><label for="docPassword">Senha <span id="docPwdHint" class="muted">*</span></label><input type="password" id="docPassword" autocomplete="new-password"></div>
+                  <div id="docInitialDoses" style="display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:8px;">
+                    <div class="admin-input-row"><label for="docIcr">ICR</label><input type="number" id="docIcr" value="8" step="0.5" style="width:100%; box-sizing:border-box;"></div>
+                    <div class="admin-input-row"><label for="docIsf">ISF</label><input type="number" id="docIsf" value="40" step="1" style="width:100%; box-sizing:border-box;"></div>
+                    <div class="admin-input-row" style="grid-column:1 / -1;"><label for="docTarget">Alvo</label><input type="number" id="docTarget" value="100" step="1" style="width:100%; box-sizing:border-box;"></div>
+                  </div>
+                  <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                    <button type="submit" class="btn-primary" id="docSubmitBtn">Cadastrar</button>
+                    <button type="button" class="btn-secondary hidden" id="docCancelEdit">Cancelar edição</button>
+                  </div>
+                </form>
+              </div>
+              <div style="overflow-x:auto;">
+                <table>
+                  <thead><tr><th>Paciente</th><th>Login</th><th>Leituras</th><th>Última glicose</th><th>Mensagens</th><th>Ações</th></tr></thead>
+                  <tbody id="docPatientsBody"><tr><td colspan="6" class="muted">Carregando...</td></tr></tbody>
+                </table>
+              </div>
+            </div>
+          </section>
+
+        </div>
+
+        <!-- Importação de CSV (/importacao) -->
+        <div id="page-import" class="page-view hidden">
+
+          <section class="card">
+            <h2>Importar leituras do sensor (FreeStyle Libre)</h2>
+            <p class="muted">Os arquivos são gravados exclusivamente no perfil em foco.</p>
+            <form id="uploadForm" class="upload-form">
+              <div class="upload-row">
+                <input id="file" type="file" accept=".csv" multiple>
+                <span id="fileChosen" class="file-chosen-text">Nenhum arquivo selecionado</span>
+              </div>
+              <div class="range-row">
+                <label>Faixa inferior <input id="low" type="number" value="70"> mg/dL</label>
+                <label>Faixa superior <input id="high" type="number" value="180"> mg/dL</label>
+                <label class="checkbox-label"><input id="cumulative" type="checkbox" checked> Adicionar ao histórico existente</label>
+              </div>
+              <div class="upload-actions">
+                <button type="submit" class="btn-primary" id="btnUpload">Analisar e salvar</button>
+                <button type="button" class="btn-success" id="btnExportCons">Baixar CSV consolidado</button>
+              </div>
+            </form>
+            <div id="datasetBadge" class="dataset-badge hidden"><strong>Base ativa:</strong> <span id="datasetSummary">—</span></div>
+            <div id="uploadStatus" style="margin-top:10px; font-weight:500;"></div>
+          </section>
+
+        </div>
+
+        <!-- Alimentação e bolus (/alimentacao) -->
+        <div id="page-diet" class="page-view hidden">
+
+          <section class="card diet-section" id="dietSection">
+            <div class="diet-header-title">
+              <div>
+                <h2>Dieta, Carboidratos e Bolus de Insulina</h2>
+                <p class="muted">Análise nutricional com Google Gemini, cálculo de bolus e simulação pós-prandial.</p>
+              </div>
+            </div>
+
+            <div class="card-inner metabolic-profile-card">
+              <div class="profile-header-row">
+                <div>
+                  <h3 style="margin:0 0 2px 0;">Dosagens Metabólicas Prescritas</h3>
+                  <span class="muted" style="font-size:12.5px;" id="profileUpdatedInfo">Definidas pelo médico responsável</span>
+                </div>
+                <button type="button" id="btnSaveProfile" class="btn-primary btn-sm hide-for-paciente">Salvar dosagens</button>
+              </div>
+              <div id="profileAlert" class="hidden" style="margin-top:10px; padding:8px 12px; border-radius:6px; font-size:12.5px; font-weight:600;"></div>
+              <div class="metabolic-profile-grid">
+                <div>
+                  <label for="profIcr"><b>Razão Carboidrato/Insulina (ICR)</b></label>
+                  <div class="input-unit-wrap"><input type="number" id="profIcr" min="1" max="50" step="0.5" value="8"><span class="unit-tag">g / UI</span></div>
+                </div>
+                <div>
+                  <label for="profIsf"><b>Fator de Sensibilidade (ISF)</b></label>
+                  <div class="input-unit-wrap"><input type="number" id="profIsf" min="5" max="200" step="1" value="40"><span class="unit-tag">mg/dL por UI</span></div>
+                </div>
+                <div>
+                  <label for="profTarget"><b>Glicose Alvo</b></label>
+                  <div class="input-unit-wrap"><input type="number" id="profTarget" min="70" max="180" step="1" value="100"><span class="unit-tag">mg/dL</span></div>
+                </div>
+              </div>
+              <div style="margin-top:12px;">
+                <label for="profNotes"><b>Orientações clínicas do médico</b></label>
+                <textarea id="profNotes" rows="2" style="width:100%; box-sizing:border-box; padding:10px; border:1px solid #cbd5e1; border-radius:8px; font-family:inherit;" placeholder="Sem orientações registradas."></textarea>
+              </div>
+              <div class="profile-tip-strip">Referência: 1 g de carboidrato eleva a glicose em cerca de <b id="lblExcursionRatio">5.0 mg/dL</b> (ISF ÷ ICR).</div>
+            </div>
+
+            <div class="card-inner">
+              <h3>Análise do plano alimentar (Gemini multimodal)</h3>
+              <div class="diet-examples-row">
+                <span style="font-size:12px; font-weight:600; color:#64748b;">Exemplos:</span>
+                <button type="button" class="btn-chip" data-example="breakfast">Café da manhã</button>
+                <button type="button" class="btn-chip" data-example="lunch">Almoço</button>
+                <button type="button" class="btn-chip" data-example="lowgi">Jantar low-carb</button>
+              </div>
+              <div class="diet-input-layout">
+                <div class="diet-text-box">
+                  <label for="dietTextInput" style="font-size:12.5px; font-weight:600;">Descreva a refeição:</label>
+                  <textarea id="dietTextInput" rows="4" placeholder="Ex.: 4 colheres de arroz, 1 concha de feijão, 1 filé de frango grelhado..."></textarea>
+                </div>
+                <div>
+                  <label style="font-size:12.5px; font-weight:600;">Ou envie um arquivo (PDF, imagem, TXT):</label>
+                  <div class="diet-dropzone">
+                    <input type="file" id="dietFileInput" accept=".pdf,image/png,image/jpeg,image/webp,.txt" class="dropzone-input">
+                    <span id="dietFileChosenText">Clique para selecionar ou arraste o arquivo</span>
+                  </div>
+                  <button type="button" id="btnClearDietFile" class="btn-secondary btn-sm hidden" style="margin-top:6px;">Remover anexo</button>
+                </div>
+              </div>
+              <button type="button" id="btnAnalyzeDiet" class="btn-gemini-gradient"><span id="btnAnalyzeDietText">Analisar dieta com Gemini</span></button>
+              <div id="dietStatusAlert" class="hidden" style="margin-top:12px; padding:10px 14px; border-radius:8px; font-size:13px;"></div>
+            </div>
+
+            <div id="dietResultsContainer" class="hidden card-inner">
+              <h3>Refeições extraídas</h3>
+              <div id="dietMealsList" class="meals-cards-grid"></div>
+            </div>
+
+            <div class="card-inner" id="bolusCalcCard">
+              <h3>Calculadora de Bolus (alimentação + correção)</h3>
+              <div class="bolus-form-grid">
+                <div class="bolus-input-field">
+                  <label for="bolusCurrentGlucose"><b>Glicose atual (mg/dL)</b> <button type="button" id="btnSyncCurrentGlucose" class="btn-link-action">Usar última leitura</button></label>
+                  <input type="number" id="bolusCurrentGlucose" min="20" max="600" step="1">
+                </div>
+                <div class="bolus-input-field">
+                  <label for="bolusCarbs"><b>Carboidratos (g)</b></label>
+                  <input type="number" id="bolusCarbs" min="0" max="300" step="0.5">
+                </div>
+                <div class="bolus-input-field">
+                  <label for="bolusMealTime"><b>Horário da refeição</b></label>
+                  <input type="time" id="bolusMealTime" value="12:30">
+                </div>
+                <div class="bolus-input-field">
+                  <label for="bolusGlycemicIndex"><b>Índice glicêmico</b></label>
+                  <select id="bolusGlycemicIndex">
+                    <option value="Baixo">Baixo</option>
+                    <option value="Médio" selected>Médio</option>
+                    <option value="Alto">Alto</option>
+                  </select>
+                </div>
+              </div>
+              <div style="margin:12px 0;">
+                <label class="checkbox-label"><input id="chkApplyBolusSim" type="checkbox" checked> Simular com o bolus recomendado aplicado</label>
+              </div>
+              <button type="button" id="btnCalculateBolus" class="btn-primary">Calcular bolus e simular curva</button>
+              <div id="bolusStatusAlert" class="hidden" style="margin-top:12px; padding:10px 14px; border-radius:8px; font-size:13px;"></div>
+
+              <div class="bolus-hero-cards">
+                <div class="bolus-card"><span class="bolus-card-title">Bolus alimentação</span><div class="bolus-value-wrap"><span class="bolus-val" id="dispBolusCho">—</span><span class="bolus-unit">UI</span></div><small id="dispBolusChoFormula">CHO ÷ ICR</small></div>
+                <div class="bolus-card"><span class="bolus-card-title">Bolus correção</span><div class="bolus-value-wrap"><span class="bolus-val" id="dispBolusCorr">—</span><span class="bolus-unit">UI</span></div><small id="dispBolusCorrFormula">(Glicose − Alvo) ÷ ISF</small></div>
+                <div class="bolus-card bolus-card-total"><span class="bolus-card-title">Bolus total</span><div class="bolus-value-wrap"><span class="bolus-val" id="dispBolusTotal">—</span><span class="bolus-unit">UI</span></div><small id="dispBolusTotalFormula">Alimentação + Correção</small></div>
+              </div>
+              <div id="dispBolusAlert" class="bolus-clinical-notice hidden"></div>
+              <div class="chart-wrapper" style="min-height:300px; margin-top:20px;"><canvas id="dietCurveChart"></canvas></div>
+            </div>
+
+            <div class="card-inner">
+              <h3>Revisão de dietas e contagem de carboidratos</h3>
+              <p class="muted" style="font-size:12.5px;">Refeições analisadas ou calculadas. <span class="hide-for-paciente">Registre seu parecer clínico em cada refeição.</span></p>
+              <div style="overflow-x:auto;" id="dietLogsTable"><p class="muted">Nenhuma refeição registrada.</p></div>
+            </div>
+          </section>
+
+        </div>
+
+        <!-- Mensagens (/mensagens) -->
+        <div id="page-messages" class="page-view hidden">
+
+          <section class="card chat-card" id="chatSection">
+            <h2>Mensagens <span class="paciente-only-label" id="chatSubtitle"></span></h2>
+            <div class="chat-layout">
+              <div class="chat-contacts-list medico-only" id="chatContacts"></div>
+              <div class="chat-conversation-box">
+                <div class="chat-conv-header"><span id="chatPeerName">Selecione um contato</span><button type="button" class="btn-secondary btn-sm" id="btnChatRefresh">Atualizar</button></div>
+                <div class="chat-messages-stream" id="chatStream"><p class="muted">Nenhuma conversa selecionada.</p></div>
+                <form class="chat-input-bar" id="chatForm">
+                  <input type="text" id="chatInput" placeholder="Digite sua mensagem..." maxlength="2000" autocomplete="off">
+                  <button type="submit" class="btn-primary">Enviar</button>
+                </form>
+              </div>
+            </div>
+          </section>
+
+        </div>
+
+        <!-- Painel administrativo (/admin) -->
+        <div id="page-admin" class="page-view hidden">
+
+          <!-- Gestão de médicos, pacientes e carteiras -->
+          <section id="adminPanel" class="admin-panel-card">
+            <h2>Painel do Administrador — Governança de Médicos e Pacientes</h2>
+            <p class="muted">Cadastre, edite e exclua médicos e pacientes, gerencie vínculos e inspecione qualquer carteira.</p>
+
+            <div class="panel-tabs">
+              <button type="button" class="panel-tab-btn active" data-admtab="admTabUsers">Usuários</button>
+              <button type="button" class="panel-tab-btn" data-admtab="admTabPortfolios">Carteiras dos Médicos</button>
+            </div>
+
+            <div id="admTabUsers" class="admin-grid-layout">
+              <div class="admin-create-form">
+                <h3 id="admFormTitle" style="margin-top:0;">Novo Cadastro</h3>
+                <div id="admAlert" class="hidden" style="padding:8px 10px; border-radius:6px; font-size:12.5px; font-weight:600;"></div>
+                <form id="admUserForm" style="display:flex; flex-direction:column; gap:10px;">
+                  <input type="hidden" id="admEditId">
+                  <div class="admin-input-row">
+                    <label for="admRole">Perfil</label>
+                    <select id="admRole">
+                      <option value="paciente">Paciente</option>
+                      <option value="medico">Médico</option>
+                      <option value="adm">Administrador</option>
+                    </select>
+                  </div>
+                  <div class="admin-input-row">
+                    <label for="admUsername">Login *</label>
+                    <input type="text" id="admUsername" required>
+                  </div>
+                  <div class="admin-input-row">
+                    <label for="admFullName">Nome completo</label>
+                    <input type="text" id="admFullName">
+                  </div>
+                  <div class="admin-input-row">
+                    <label for="admPassword">Senha <span id="admPwdHint" class="muted">*</span></label>
+                    <input type="password" id="admPassword" autocomplete="new-password">
+                  </div>
+                  <div class="admin-input-row" id="admCrmRow">
+                    <label for="admCrm">CRM</label>
+                    <input type="text" id="admCrm" placeholder="ex.: CRM-SP 123456">
+                  </div>
+                  <div class="admin-input-row" id="admDoctorRow">
+                    <label for="admDoctorSelect">Médico responsável</label>
+                    <select id="admDoctorSelect"></select>
+                  </div>
+                  <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                    <button type="submit" class="btn-primary" id="admSubmitBtn">Criar</button>
+                    <button type="button" class="btn-secondary hidden" id="admCancelEdit">Cancelar edição</button>
+                  </div>
+                </form>
+              </div>
+
+              <div style="overflow-x:auto;">
+                <h3 style="margin-top:0;">Usuários cadastrados</h3>
+                <table>
+                  <thead>
+                    <tr><th>ID</th><th>Login</th><th>Nome</th><th>Perfil</th><th>Médico / CRM</th><th>Leituras</th><th>Ações</th></tr>
+                  </thead>
+                  <tbody id="admUsersBody"><tr><td colspan="7" class="muted">Carregando...</td></tr></tbody>
+                </table>
+              </div>
+            </div>
+
+            <div id="admTabPortfolios" class="hidden">
+              <p class="muted">Clique em um médico para visualizar separadamente o painel e os pacientes vinculados.</p>
+              <div id="admPortfoliosGrid" class="doctor-portfolios-grid"></div>
+              <div id="admPortfolioDetail"></div>
+            </div>
+          </section>
+
+          <!-- Status do banco e manutenção -->
+          <section id="dbStatusBanner" class="db-status-banner">
+            <div class="db-status-header">
+              <div class="db-live-indicator">
+                <span class="pulse-dot" id="dbPulseDot"></span>
+                <span id="dbTitleText">Banco de Dados: <b>Carregando...</b></span>
+              </div>
+              <span class="badge-role role-adm">Controles exclusivos do ADM</span>
+            </div>
+
+            <div id="dbAlertWarning" class="hidden" style="background:#fffbeb; border:1px solid #fde68a; color:#92400e; padding:10px 14px; border-radius:8px; font-size:13px; margin-bottom:12px;">
+              <b>PostgreSQL indisponível</b> em <code id="pgTargetHost">localhost:5432</code>. Operando em modo de contingência via SQLite. Inicie o PostgreSQL e clique em "Reconectar PostgreSQL".
+            </div>
+
+            <div class="db-stats-chips">
+              <div class="db-chip">Motor: <strong id="statEngine">—</strong></div>
+              <div class="db-chip">Leituras (perfil em foco): <strong id="statTotal">—</strong></div>
+              <div class="db-chip">Manuais: <strong id="statManual">—</strong></div>
+              <div class="db-chip">Sensor: <strong id="statSensor">—</strong></div>
+              <div class="db-chip">Período: <strong id="statSpan">—</strong></div>
+              <div class="db-chip">Previsões: <strong id="statPreds">—</strong></div>
+              <div class="db-chip db-chip-highlight">Modelo Global: <strong id="statGlobalModel">—</strong></div>
+            </div>
+
+            <div class="db-actions">
+              <button type="button" id="btnReconnectPg" class="btn-primary">Reconectar PostgreSQL</button>
+              <button type="button" id="btnRetrainModel" class="btn-secondary">Retreinar modelos globais</button>
+              <button type="button" id="btnReseedDb" class="btn-secondary">Restaurar base inicial</button>
+              <button type="button" id="btnClearManual" class="btn-secondary">Limpar histórico manual</button>
+              <button type="button" id="btnResetDataset" class="btn-danger">Limpar dados do perfil</button>
+            </div>
+
+            <div class="adm-synthetic-bar">
+              <b>Dados sintéticos:</b>
+              <label>Paciente de teste
+                <select id="synTargetSelect"></select>
+              </label>
+              <button type="button" id="btnCreateTestPatient" class="btn-secondary btn-sm">Criar paciente de teste</button>
+              <label>Dias <input type="number" id="synDays" value="15" min="1" max="60" style="width:60px;"></label>
+              <label class="checkbox-label"><input type="checkbox" id="synCumulative"> Cumulativo</label>
+              <button type="button" id="btnSynthetic" class="btn-primary btn-sm">Testar dados sintéticos</button>
+              <button type="button" id="btnExportSyn" class="btn-success btn-sm">Baixar CSV sintético</button>
+            </div>
+            <div id="infraStatus" style="margin-top:10px; font-weight:600; font-size:13px;"></div>
+          </section>
+
+          <!-- Métricas do modelo base global -->
+          <div class="card">
+            <h2>Métricas técnicas — Modelo Base Global (+30 min)</h2>
+            <table>
+              <thead><tr><th>Modelo</th><th>MAE</th><th>RMSE</th><th>R²</th><th>Hiperparâmetros</th></tr></thead>
+              <tbody id="models"></tbody>
+            </table>
+            <p id="best" style="margin-top:12px; font-weight:600; color:#1e40af;"></p>
+            <h3>Importância das features (global)</h3>
+            <table><thead><tr><th>Feature</th><th>Peso</th></tr></thead><tbody id="imp"></tbody></table>
+          </div>
+
+          <!-- Relatório do modelo personalizado -->
+          <div class="card">
+            <h2>Modelo Personalizado do Paciente (aprendizado contínuo)</h2>
+            <div id="persReport" class="muted">Sem modelo personalizado.</div>
+          </div>
+
+        </div>
+
+      </div>
+
+      <footer>Protótipo acadêmico para TCC. Não constitui diagnóstico médico nem prescrição de insulina.</footer>
+    </main>
+
+  </div>
+</div>
+
+<!-- Modal de edição de leitura manual -->
+<div id="editReadingModal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="editReadingTitle">
+  <div class="modal-dialog">
+    <h3 id="editReadingTitle">Editar leitura <span id="editReadingIdLbl"></span></h3>
+    <div class="manual-grid" style="grid-template-columns:1fr;">
+      <label>Glicose (mg/dL)<input type="number" id="editGlucose" min="20" max="600" step="1"></label>
+      <label>Data<input type="date" id="editDate"></label>
+      <label>Hora (hh:mm:ss)<input type="time" id="editTime" step="1"></label>
+    </div>
+    <div id="editReadingAlert" class="hidden" style="color:#991b1b; font-weight:600; font-size:13px; margin-bottom:8px;"></div>
+    <div style="display:flex; gap:8px; justify-content:flex-end;">
+      <button type="button" class="btn-secondary" id="btnEditCancel">Cancelar</button>
+      <button type="button" class="btn-primary" id="btnEditSave">Salvar alterações</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// Rotas e menu lateral por perfil
+const navigationConfig = [
+  {
+    path: "/dashboard",
+    pageId: "page-dashboard",
+    label: "Página principal",
+    allowedRoles: ["paciente", "medico", "adm", "administrador"]
+  },
+  {
+    path: "/carteira-pacientes",
+    pageId: "page-patients",
+    label: "Carteira de pacientes",
+    allowedRoles: ["medico", "adm", "administrador"]
+  },
+  {
+    path: "/importacao",
+    pageId: "page-import",
+    label: "Importação",
+    allowedRoles: ["paciente", "medico", "adm", "administrador"]
+  },
+  {
+    path: "/alimentacao",
+    pageId: "page-diet",
+    label: "Alimentação",
+    allowedRoles: ["paciente", "medico", "adm", "administrador"]
+  },
+  {
+    path: "/mensagens",
+    pageId: "page-messages",
+    label: "Mensagens",
+    allowedRoles: ["paciente", "medico"]
+  },
+  {
+    path: "/admin",
+    pageId: "page-admin",
+    label: "Painel do Administrador",
+    allowedRoles: ["adm", "administrador"]
+  }
+];
+
+let currentPagePath = "/dashboard";
+
+function getAllowedPagesForRole(userRole) {
+  const r = String(userRole || "").toLowerCase();
+  return navigationConfig.filter(item => item.allowedRoles.includes(r));
+}
+
+function renderSidebarMenu(userRole) {
+  const menuEl = document.getElementById("sidebarMenu");
+  if (!menuEl) return;
+  const items = getAllowedPagesForRole(userRole);
+  menuEl.innerHTML = items.map(item => `
+    <button type="button" class="sidebar-page-btn ${item.path === currentPagePath ? "active" : ""}" data-page-path="${item.path}">
+      <span class="sidebar-page-label">${item.label}</span>
+    </button>
+  `).join("");
+
+  menuEl.querySelectorAll(".sidebar-page-btn").forEach(btn => {
+    btn.onclick = () => navigateToPage(btn.getAttribute("data-page-path"));
+  });
+}
+
+function navigateToPage(path, replace = false) {
+  if (!currentUser) return;
+  const allowed = getAllowedPagesForRole(currentUser.role);
+  let target = allowed.find(item => item.path === path);
+  if (!target) {
+    target = allowed.find(item => item.path === "/dashboard") || allowed[0];
+  }
+  if (!target) return;
+
+  currentPagePath = target.path;
+
+  try {
+    if (window.location.pathname !== target.path) {
+      if (replace) window.history.replaceState({ path: target.path }, "", target.path);
+      else window.history.pushState({ path: target.path }, "", target.path);
+    }
+  } catch (_) {}
+
+  document.querySelectorAll("#sidebarMenu .sidebar-page-btn").forEach(btn => {
+    btn.classList.toggle("active", btn.getAttribute("data-page-path") === target.path);
+  });
+
+  navigationConfig.forEach(item => {
+    const el = document.getElementById(item.pageId);
+    if (el) el.classList.toggle("hidden", item.pageId !== target.pageId);
+  });
+
+  document.getElementById("appSidebar").classList.remove("mobile-open");
+  document.getElementById("sidebarBackdrop").classList.remove("mobile-open");
+
+  if (target.path === "/dashboard") {
+    setTimeout(() => { if (chart) chart.resize(); }, 50);
+  } else if (target.path === "/alimentacao") {
+    setTimeout(() => { if (dietCurveChartInstance) dietCurveChartInstance.resize(); }, 50);
+  } else if (target.path === "/mensagens" && !isAdm()) {
+    if (chatPeerId) refreshChat();
+    else loadChatContacts(true);
+  }
+}
+
+window.addEventListener("popstate", () => {
+  if (currentUser) navigateToPage(window.location.pathname, true);
+});
+
+// Estado da interface e funções auxiliares
+let chart = null, dietCurveChartInstance = null;
+let currentData = null, currentDay = null, currentView = "daily";
+let currentUser = null, activePatientId = null;
+let activePredictionLog = null;
+let extractedMealsData = [];
+let chatPeerId = null, chatPollTimer = null, unreadPollTimer = null, clockTimer = null;
+let editingReadingId = null;
+let adminCache = { users: [], doctors: [], patients: [], portfolios: [] };
+let doctorPatients = [];
+
+const $ = id => document.getElementById(id);
+const f = x => (x == null || isNaN(x)) ? "—" : Number(x).toFixed(2);
+const f0 = x => (x == null || isNaN(x)) ? "—" : Math.round(Number(x)).toString();
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const role = () => currentUser ? currentUser.role : null;
+const isAdm = () => role() === "adm" || role() === "administrador";
+const isMedico = () => role() === "medico";
+const isPaciente = () => role() === "paciente";
+const ROLE_LABEL = { adm: "ADM", administrador: "ADM", medico: "Médico", paciente: "Paciente" };
+
+const TIME_SLOTS_15M = [];
+for (let h = 0; h < 24; h++) for (let m = 0; m < 60; m += 15) TIME_SLOTS_15M.push(String(h).padStart(2, "0") + ":" + String(m).padStart(2, "0"));
+
+function fmtDate(s) {
+  if (!s) return "—";
+  const d = new Date(String(s).replace(" ", "T"));
+  return isNaN(d) ? esc(s) : d.toLocaleString("pt-BR");
+}
+
+function formatDayLabel(dateStr) {
+  if (!dateStr) return "—";
+  const [y, m, d] = dateStr.split("-").map(Number);
+  const dt = new Date(y, m - 1, d);
+  const wd = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"][dt.getDay()];
+  return `${String(d).padStart(2, "0")}/${String(m).padStart(2, "0")}/${y} (${wd})`;
+}
+
+function patientQS(prefix = "?") {
+  return (!isPaciente() && activePatientId) ? `${prefix}patient_id=${activePatientId}` : "";
+}
+
+async function api(url, opts = {}) {
+  try {
+    const res = await fetch(url, opts);
+    if (res.status === 401) { showLogin("Sua sessão expirou. Entre novamente."); return { ok: false, data: {} }; }
+    let data = {};
+    const ct = res.headers.get("content-type") || "";
+    if (ct.includes("application/json")) data = await res.json();
+    if (!res.ok && !data.error) data.error = data.detail || `Erro HTTP ${res.status}`;
+    return { ok: res.ok, data };
+  } catch (e) {
+    return { ok: false, data: { error: "Falha de conexão com o servidor." } };
+  }
+}
+const jsonOpts = (method, body) => ({ method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+
+function flash(el, msg, kind = "ok", ms = 5000) {
+  if (!el) return;
+  const styles = { ok: ["#dcfce7", "#166534"], err: ["#fee2e2", "#991b1b"], info: ["#eff6ff", "#1e40af"], warn: ["#fffbeb", "#92400e"] };
+  el.style.background = styles[kind][0];
+  el.style.color = styles[kind][1];
+  el.style.padding = el.style.padding || "8px 12px";
+  el.style.borderRadius = "8px";
+  el.textContent = msg;
+  el.classList.remove("hidden");
+  if (ms) setTimeout(() => el.classList.add("hidden"), ms);
+}
+
+// Login e sessão
+$("btnTogglePwd").onclick = () => {
+  const p = $("loginPassword");
+  p.type = p.type === "password" ? "text" : "password";
+  $("btnTogglePwd").textContent = p.type === "password" ? "Mostrar" : "Ocultar";
+};
+
+$("loginForm").onsubmit = async (e) => {
+  e.preventDefault();
+  $("loginAlert").classList.add("hidden");
+  $("btnLoginSubmit").disabled = true;
+  const { ok, data } = await api("/api/auth/login", jsonOpts("POST", {
+    username: $("loginUsername").value.trim(), password: $("loginPassword").value
+  }));
+  $("btnLoginSubmit").disabled = false;
+  if (!ok) {
+    $("loginAlert").textContent = data.error || "Falha no login.";
+    $("loginAlert").classList.remove("hidden");
+    return;
+  }
+  $("loginPassword").value = "";
+  await enterApp(data.user);
+};
+
+$("btnLogout").onclick = async () => {
+  await api("/api/auth/logout", { method: "POST" });
+  showLogin();
+};
+
+function showLogin(msg) {
+  currentUser = null; activePatientId = null; chatPeerId = null;
+  clearInterval(chatPollTimer); clearInterval(unreadPollTimer);
+  document.body.className = "";
+  $("appView").classList.add("hidden");
+  $("loginView").classList.remove("hidden");
+  if (msg) { $("loginAlert").textContent = msg; $("loginAlert").classList.remove("hidden"); }
+}
+
+async function checkAuthAndInit() {
+  const { ok, data } = await api("/api/auth/me");
+  if (ok && data.authenticated) await enterApp(data.user, data.unread_total);
+  else showLogin();
+}
+
+async function enterApp(user, unread = 0) {
+  currentUser = user;
+  const cssRole = isAdm() ? "adm" : user.role;
+  document.body.className = "role-" + cssRole;
+  $("loginView").classList.add("hidden");
+  $("appView").classList.remove("hidden");
+  $("userDisplayName").textContent = user.full_name || user.username;
+  $("userAvatar").textContent = (user.full_name || user.username || "U").charAt(0).toUpperCase();
+  $("userRoleBadge").textContent = ROLE_LABEL[user.role] || user.role;
+  $("userRoleBadge").className = "user-role-tag role-" + cssRole;
+  updateUnreadBadge(unread);
+
+  renderSidebarMenu(user.role);
+
+  // Paciente apenas visualiza as dosagens prescritas pelo médico
+  ["profIcr", "profIsf", "profTarget", "profNotes"].forEach(id => $(id).disabled = isPaciente());
+
+  activePatientId = null;
+  if (isAdm()) {
+    await loadAdminUsers();
+    await loadDoctorPatients();
+    if (!activePatientId && adminCache.patients.length) {
+      const withReadings = adminCache.patients.find(p => Number(p.readings_count) > 0);
+      activePatientId = (withReadings || adminCache.patients[0]).id;
+    }
+    fillActivePatientSelect();
+  } else if (isMedico()) {
+    await loadDoctorPatients();
+    activePatientId = doctorPatients.length ? doctorPatients[0].id : null;
+    fillActivePatientSelect();
+  }
+
+  const startPath = window.location.pathname && window.location.pathname !== "/" ? window.location.pathname : "/dashboard";
+  navigateToPage(startPath, true);
+
+  await loadCurrentDataset();
+
+  if (!isAdm()) {
+    await loadChatContacts();
+    clearInterval(unreadPollTimer);
+    unreadPollTimer = setInterval(pollUnread, 20000);
+  }
+}
+
+function updateUnreadBadge(n) {
+  const b = $("navUnread");
+  if (!b) return;
+  if (n > 0) { b.textContent = n; b.classList.remove("hidden"); } else b.classList.add("hidden");
+}
+
+async function pollUnread() {
+  const { ok, data } = await api("/api/auth/me");
+  if (ok && data.authenticated) {
+    updateUnreadBadge(data.unread_total || 0);
+    if (isMedico()) loadChatContacts(false);
+  }
+}
+
+// Atalhos de navegação do topo e menu mobile
+$("btnMobileSidebar").onclick = () => {
+  $("appSidebar").classList.toggle("mobile-open");
+  $("sidebarBackdrop").classList.toggle("mobile-open");
+};
+$("sidebarBackdrop").onclick = () => {
+  $("appSidebar").classList.remove("mobile-open");
+  $("sidebarBackdrop").classList.remove("mobile-open");
+};
+
+$("btnNavAdmin").onclick = () => navigateToPage("/admin");
+$("btnNavDoctor").onclick = () => navigateToPage("/carteira-pacientes");
+$("btnNavChat").onclick = () => navigateToPage("/mensagens");
+
+document.querySelectorAll("[data-admtab]").forEach(btn => {
+  btn.onclick = () => {
+    document.querySelectorAll("[data-admtab]").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    ["admTabUsers", "admTabPortfolios"].forEach(id => $(id).classList.toggle("hidden", id !== btn.dataset.admtab));
+  };
+});
+
+// Seletor do paciente ativo (médico e administrador)
+function fillActivePatientSelect() {
+  const sel = $("activePatientSelect");
+  sel.innerHTML = "";
+  if (isAdm()) {
+    sel.add(new Option(`Meu perfil (${currentUser.username})`, ""));
+    adminCache.patients.forEach(p => sel.add(new Option(`${p.full_name || p.username} (#${p.id})${p.doctor_name ? " — " + p.doctor_name : " — sem médico"}`, p.id)));
+  } else if (isMedico()) {
+    doctorPatients.forEach(p => sel.add(new Option(`${p.full_name || p.username} (#${p.id})`, p.id)));
+  }
+  sel.value = activePatientId ? String(activePatientId) : "";
+  $("noPatientNotice").classList.toggle("hidden", !(isMedico() && !doctorPatients.length));
+}
+
+$("activePatientSelect").onchange = e => selectPatient(e.target.value ? Number(e.target.value) : null);
+
+async function selectPatient(id, goDashboard = false) {
+  activePatientId = id;
+  $("activePatientSelect").value = id ? String(id) : "";
+  activePredictionLog = null;
+  extractedMealsData = [];
+  $("dietResultsContainer").classList.add("hidden");
+  renderDoctorPatients();
+  await loadCurrentDataset();
+  if (isMedico() && id) openChat(id);
+  if (goDashboard) {
+    navigateToPage("/dashboard");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+}
+
+// Administração de usuários e carteiras médicas
+async function loadAdminUsers() {
+  const { ok, data } = await api("/api/admin/users");
+  if (!ok) return;
+  applyAdminData(data);
+}
+
+function applyAdminData(data) {
+  if (data.users) {
+    adminCache.users = data.users;
+    adminCache.doctors = data.users.filter(u => u.role === "medico");
+    adminCache.patients = data.users.filter(u => u.role === "paciente");
+  }
+  if (data.portfolios) adminCache.portfolios = data.portfolios;
+  renderAdminUsers();
+  renderPortfolios();
+  fillDoctorSelect();
+  fillActivePatientSelect();
+  fillSyntheticSelect();
+}
+
+function fillDoctorSelect() {
+  const sel = $("admDoctorSelect");
+  const prev = sel.value;
+  sel.innerHTML = "";
+  sel.add(new Option("— Sem médico vinculado —", ""));
+  adminCache.doctors.forEach(d => sel.add(new Option(`${d.full_name || d.username}${d.crm ? " (" + d.crm + ")" : ""}`, d.id)));
+  sel.value = prev;
+}
+
+function fillSyntheticSelect() {
+  const sel = $("synTargetSelect");
+  const prev = sel.value;
+  sel.innerHTML = "";
+  adminCache.patients.forEach(p => sel.add(new Option(`${p.full_name || p.username} (#${p.id})`, p.id)));
+  if (!adminCache.patients.length) sel.add(new Option("Crie um paciente de teste", ""));
+  const testP = adminCache.patients.find(p => /teste/i.test(p.username));
+  sel.value = prev || (testP ? String(testP.id) : (sel.options[0] ? sel.options[0].value : ""));
+}
+
+function updateAdmFormVisibility() {
+  const r = $("admRole").value;
+  $("admCrmRow").classList.toggle("hidden", r !== "medico");
+  $("admDoctorRow").classList.toggle("hidden", r !== "paciente");
+}
+$("admRole").onchange = updateAdmFormVisibility;
+
+function resetAdmForm() {
+  $("admUserForm").reset();
+  $("admEditId").value = "";
+  $("admFormTitle").textContent = "Novo Cadastro";
+  $("admSubmitBtn").textContent = "Criar";
+  $("admPwdHint").textContent = "*";
+  $("admCancelEdit").classList.add("hidden");
+  $("admUsername").disabled = false;
+  updateAdmFormVisibility();
+}
+$("admCancelEdit").onclick = resetAdmForm;
+
+function renderAdminUsers() {
+  const body = $("admUsersBody");
+  if (!adminCache.users.length) { body.innerHTML = `<tr><td colspan="7" class="muted">Nenhum usuário.</td></tr>`; return; }
+  body.innerHTML = adminCache.users.map(u => {
+    let linkCell = "—";
+    if (u.role === "medico") linkCell = esc(u.crm || "—");
+    if (u.role === "paciente") {
+      const opts = [`<option value="">— Sem médico —</option>`].concat(adminCache.doctors.map(d =>
+        `<option value="${d.id}" ${d.id === u.doctor_id ? "selected" : ""}>${esc(d.full_name || d.username)}</option>`)).join("");
+      linkCell = `<select onchange="admLinkDoctor(${u.id}, this.value)" style="padding:4px 6px; border-radius:6px;">${opts}</select>`;
+    }
+    const isSelf = u.id === currentUser.id;
+    return `<tr>
+      <td>#${u.id}</td>
+      <td><code>${esc(u.username)}</code></td>
+      <td>${esc(u.full_name || "—")}</td>
+      <td><span class="badge-role role-${u.role}">${ROLE_LABEL[u.role] || esc(u.role)}</span></td>
+      <td>${linkCell}</td>
+      <td>${Number(u.readings_count || 0).toLocaleString("pt-BR")}</td>
+      <td style="white-space:nowrap;">
+        ${u.role === "paciente" ? `<button class="btn-secondary btn-sm" onclick="selectPatient(${u.id}, true)">Ver</button>` : ""}
+        <button class="btn-secondary btn-sm" onclick="admEditUser(${u.id})">Editar</button>
+        ${isSelf ? "" : `<button class="btn-danger btn-sm" onclick="admDeleteUser(${u.id})">Excluir</button>`}
+      </td>
+    </tr>`;
+  }).join("");
+}
+
+function admEditUser(id) {
+  const u = adminCache.users.find(x => x.id === id);
+  if (!u) return;
+  $("admEditId").value = u.id;
+  $("admRole").value = u.role;
+  $("admUsername").value = u.username;
+  $("admFullName").value = u.full_name || "";
+  $("admPassword").value = "";
+  $("admCrm").value = u.crm || "";
+  $("admDoctorSelect").value = u.doctor_id ? String(u.doctor_id) : "";
+  $("admFormTitle").textContent = `Editando #${u.id}`;
+  $("admSubmitBtn").textContent = "Salvar";
+  $("admPwdHint").textContent = "(deixe em branco para manter)";
+  $("admCancelEdit").classList.remove("hidden");
+  updateAdmFormVisibility();
+  navigateToPage("/admin");
+  $("adminPanel").scrollIntoView({ behavior: "smooth" });
+}
+
+$("admUserForm").onsubmit = async (e) => {
+  e.preventDefault();
+  const editId = $("admEditId").value;
+  const r = $("admRole").value;
+  const payload = {
+    username: $("admUsername").value.trim(),
+    full_name: $("admFullName").value.trim(),
+    role: r,
+    crm: r === "medico" ? ($("admCrm").value.trim() || null) : null,
+    doctor_id: r === "paciente" && $("admDoctorSelect").value ? Number($("admDoctorSelect").value) : null,
+  };
+  const pwd = $("admPassword").value;
+  if (pwd) payload.password = pwd;
+  if (!editId && !pwd) { flash($("admAlert"), "Informe uma senha para o novo cadastro.", "err"); return; }
+
+  const { ok, data } = editId
+    ? await api(`/api/admin/users/${editId}`, jsonOpts("PUT", payload))
+    : await api("/api/admin/users", jsonOpts("POST", payload));
+  if (!ok) { flash($("admAlert"), data.error, "err"); return; }
+  flash($("admAlert"), data.message, "ok");
+  resetAdmForm();
+  await loadAdminUsers();
+  await loadDoctorPatients();
+};
+
+async function admDeleteUser(id) {
+  const u = adminCache.users.find(x => x.id === id);
+  if (!confirm(`Excluir definitivamente "${u ? u.username : id}" e todos os seus dados?`)) return;
+  const { ok, data } = await api(`/api/admin/users/${id}`, { method: "DELETE" });
+  if (!ok) { alert(data.error); return; }
+  applyAdminData(data);
+  await loadDoctorPatients();
+  if (activePatientId === id) selectPatient(null);
+}
+
+async function admLinkDoctor(patientId, doctorId) {
+  const { ok, data } = await api(`/api/admin/patients/${patientId}/doctor`, jsonOpts("PATCH", { doctor_id: doctorId ? Number(doctorId) : null }));
+  if (!ok) { alert(data.error); return; }
+  flash($("admAlert"), data.message, "ok");
+  applyAdminData(data);
+  await loadDoctorPatients();
+}
+
+let selectedPortfolioDoctor = null;
+function renderPortfolios() {
+  const grid = $("admPortfoliosGrid");
+  if (!adminCache.portfolios.length) { grid.innerHTML = `<p class="muted">Nenhum médico cadastrado.</p>`; $("admPortfolioDetail").innerHTML = ""; return; }
+  grid.innerHTML = adminCache.portfolios.map(p => `
+    <div class="portfolio-card ${selectedPortfolioDoctor === p.doctor.id ? "selected-portfolio" : ""}" onclick="showPortfolio(${p.doctor.id})">
+      <div style="font-weight:800;">${esc(p.doctor.full_name || p.doctor.username)}</div>
+      <div class="muted" style="font-size:12px;">${esc(p.doctor.crm || "CRM não informado")} • login: ${esc(p.doctor.username)}</div>
+      <div style="margin-top:8px; font-size:13px;"><b>${p.patients_count}</b> pacientes • ${Number(p.total_readings || 0).toLocaleString("pt-BR")} leituras • ${p.total_predictions || 0} previsões</div>
+    </div>`).join("");
+  if (selectedPortfolioDoctor) showPortfolio(selectedPortfolioDoctor);
+}
+
+function showPortfolio(doctorId) {
+  selectedPortfolioDoctor = doctorId;
+  document.querySelectorAll(".portfolio-card").forEach(el => el.classList.remove("selected-portfolio"));
+  const p = adminCache.portfolios.find(x => x.doctor.id === doctorId);
+  if (!p) { $("admPortfolioDetail").innerHTML = ""; return; }
+  const idx = adminCache.portfolios.indexOf(p);
+  const card = document.querySelectorAll(".portfolio-card")[idx];
+  if (card) card.classList.add("selected-portfolio");
+  const unlinked = adminCache.patients.filter(x => !x.doctor_id);
+  const rows = p.patients.length ? p.patients.map(pt => `<tr>
+      <td>#${pt.id}</td><td>${esc(pt.full_name || pt.username)}</td><td><code>${esc(pt.username)}</code></td>
+      <td>${Number(pt.readings_count || 0).toLocaleString("pt-BR")}</td><td>${f0(pt.last_glucose)} mg/dL</td>
+      <td>ICR ${pt.icr} • ISF ${pt.isf} • Alvo ${pt.target_glucose}</td>
+      <td style="white-space:nowrap;"><button class="btn-primary btn-sm" onclick="selectPatient(${pt.id}, true)">Inspecionar</button>
+      <button class="btn-secondary btn-sm" onclick="admLinkDoctor(${pt.id}, '')">Desvincular</button></td></tr>`).join("")
+    : `<tr><td colspan="7" class="muted">Nenhum paciente vinculado.</td></tr>`;
+  $("admPortfolioDetail").innerHTML = `
+    <h3>Painel de ${esc(p.doctor.full_name || p.doctor.username)}</h3>
+    <div style="overflow-x:auto;"><table><thead><tr><th>ID</th><th>Paciente</th><th>Login</th><th>Leituras</th><th>Última</th><th>Dosagens</th><th>Ações</th></tr></thead><tbody>${rows}</tbody></table></div>
+    ${unlinked.length ? `<div style="margin-top:10px; display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+      <b>Vincular paciente sem médico:</b>
+      <select id="linkUnlinkedSel">${unlinked.map(u => `<option value="${u.id}">${esc(u.full_name || u.username)} (#${u.id})</option>`).join("")}</select>
+      <button class="btn-success btn-sm" onclick="admLinkDoctor(Number($('linkUnlinkedSel').value), ${doctorId})">Vincular</button></div>` : ""}`;
+}
+
+// Banco de dados e manutenção (ADM)
+function updateDbStatsDisplay(stats) {
+  if (!isAdm() || !stats) return;
+  const info = stats.db_info || {};
+  const isPg = stats.engine === "PostgreSQL" || info.is_postgres;
+  $("statEngine").textContent = isPg ? "PostgreSQL" : "SQLite (contingência)";
+  $("statEngine").style.color = isPg ? "#059669" : "#d97706";
+  $("dbPulseDot").style.backgroundColor = isPg ? "#10b981" : "#f59e0b";
+  $("dbTitleText").innerHTML = isPg
+    ? `Banco de Dados: <b>PostgreSQL conectado</b> (<code>${esc(info.postgres_target || "cgm_db")}</code>)`
+    : `Banco de Dados: <b>SQLite</b> (<code>${esc(info.sqlite_path || "cgm.db")}</code>)`;
+  $("dbAlertWarning").classList.toggle("hidden", !!isPg);
+  if (!isPg) $("pgTargetHost").textContent = info.postgres_target || "localhost:5432";
+  $("statTotal").textContent = Number(stats.total_readings || 0).toLocaleString("pt-BR");
+  $("statManual").textContent = Number(stats.manual_readings || 0).toLocaleString("pt-BR");
+  $("statSensor").textContent = Number(stats.sensor_readings || 0).toLocaleString("pt-BR");
+  $("statSpan").textContent = stats.span_days ? `${stats.span_days} dias` : "—";
+  $("statPreds").textContent = `${stats.total_predictions || 0} (${stats.evaluated_predictions || 0} avaliadas)`;
+}
+
+async function infraAction(btn, url, method, okMsg) {
+  btn.disabled = true;
+  flash($("infraStatus"), "Processando...", "info", 0);
+  const { ok, data } = await api(url, { method });
+  btn.disabled = false;
+  if (!ok) { flash($("infraStatus"), data.error, "err", 8000); return null; }
+  flash($("infraStatus"), data.message || data.synthetic_message || okMsg, "ok", 8000);
+  return data;
+}
+
+$("btnReconnectPg").onclick = async () => { if (await infraAction($("btnReconnectPg"), "/api/database/reconnect", "POST", "Conexão testada.")) loadCurrentDataset(); };
+$("btnRetrainModel").onclick = async () => { if (await infraAction($("btnRetrainModel"), "/api/models/retrain" + patientQS(), "POST", "Modelos retreinados.")) loadCurrentDataset(); };
+$("btnReseedDb").onclick = async () => {
+  if (!confirm("Restaurar a base inicial do perfil em foco? Os dados atuais deste perfil serão substituídos.")) return;
+  const d = await infraAction($("btnReseedDb"), "/api/dataset/reseed" + patientQS(), "POST", "Base inicial restaurada.");
+  if (d) { render(d); loadAdminUsers(); loadDoctorPatients(); }
+};
+$("btnClearManual").onclick = async () => {
+  if (!confirm("Remover todas as leituras manuais do perfil em foco?")) return;
+  if (await infraAction($("btnClearManual"), "/api/manual/clear" + patientQS(), "POST", "Histórico manual limpo.")) loadCurrentDataset();
+};
+$("btnResetDataset").onclick = async () => {
+  if (!confirm("Apagar TODOS os dados glicêmicos do perfil em foco? Esta ação é irreversível.")) return;
+  if (await infraAction($("btnResetDataset"), "/api/dataset/reset" + patientQS(), "POST", "Dados limpos.")) { loadCurrentDataset(); loadAdminUsers(); loadDoctorPatients(); }
+};
+
+$("btnCreateTestPatient").onclick = async () => {
+  const uname = "teste_sintetico_" + Date.now().toString().slice(-5);
+  const { ok, data } = await api("/api/admin/users", jsonOpts("POST", { username: uname, password: uname, full_name: "Paciente Teste Sintético", role: "paciente" }));
+  if (!ok) { flash($("infraStatus"), data.error, "err"); return; }
+  flash($("infraStatus"), `Paciente de teste criado: ${uname} (senha: ${uname})`, "ok", 10000);
+  applyAdminData(data);
+  await loadDoctorPatients();
+  $("synTargetSelect").value = String(data.user.id);
+};
+
+$("btnSynthetic").onclick = async () => {
+  const target = $("synTargetSelect").value;
+  if (!target) { flash($("infraStatus"), "Crie ou selecione um paciente de teste.", "warn"); return; }
+  const days = Math.max(1, Math.min(60, Number($("synDays").value) || 15));
+  const d = await infraAction($("btnSynthetic"), `/api/synthetic?cumulative=${$("synCumulative").checked}&days=${days}&target_user_id=${target}`, "POST", "Dados sintéticos gerados.");
+  if (d) { await loadAdminUsers(); await loadDoctorPatients(); activePatientId = Number(target); fillActivePatientSelect(); render(d); }
+};
+
+$("btnExportSyn").onclick = () => {
+  const target = $("synTargetSelect").value;
+  window.location.href = `/api/export/synthetic?days=${Number($("synDays").value) || 15}${target ? "&target_user_id=" + target : ""}`;
+};
+
+// Carteira de pacientes do médico
+async function loadDoctorPatients() {
+  const { ok, data } = await api("/api/doctor/patients");
+  if (!ok) return;
+  doctorPatients = data.patients || [];
+  renderDoctorPatients();
+}
+
+function renderDoctorPatients() {
+  const body = $("docPatientsBody");
+  if (!body) return;
+  if (!doctorPatients.length) { body.innerHTML = `<tr><td colspan="6" class="muted">Nenhum paciente na sua carteira.</td></tr>`; return; }
+  body.innerHTML = doctorPatients.map(p => `<tr ${p.id === activePatientId ? 'style="background:#f0fdfa;"' : ""}>
+    <td><b>${esc(p.full_name || p.username)}</b></td>
+    <td><code>${esc(p.username)}</code></td>
+    <td>${Number(p.readings_count || 0).toLocaleString("pt-BR")}</td>
+    <td>${f0(p.last_glucose)} mg/dL</td>
+    <td>${p.unread_messages ? `<span class="unread-pill">${p.unread_messages}</span>` : "—"}</td>
+    <td style="white-space:nowrap;">
+      <button class="btn-primary btn-sm" onclick="selectPatient(${p.id}, true)">Abrir</button>
+      <button class="btn-secondary btn-sm" onclick="docEditPatient(${p.id})">Editar</button>
+      <button class="btn-danger btn-sm" onclick="docDeletePatient(${p.id})">Excluir</button>
+    </td></tr>`).join("");
+}
+
+function resetDocForm() {
+  $("docPatientForm").reset();
+  $("docEditId").value = "";
+  $("docFormTitle").textContent = "Novo Paciente";
+  $("docSubmitBtn").textContent = "Cadastrar";
+  $("docPwdHint").textContent = "*";
+  $("docCancelEdit").classList.add("hidden");
+  $("docInitialDoses").classList.remove("hidden");
+}
+$("docCancelEdit").onclick = resetDocForm;
+
+function docEditPatient(id) {
+  const p = doctorPatients.find(x => x.id === id);
+  if (!p) return;
+  $("docEditId").value = p.id;
+  $("docUsername").value = p.username;
+  $("docFullName").value = p.full_name || "";
+  $("docPassword").value = "";
+  $("docFormTitle").textContent = `Editando ${p.full_name || p.username}`;
+  $("docSubmitBtn").textContent = "Salvar";
+  $("docPwdHint").textContent = "(deixe em branco para manter)";
+  $("docCancelEdit").classList.remove("hidden");
+  $("docInitialDoses").classList.add("hidden");
+}
+
+$("docPatientForm").onsubmit = async (e) => {
+  e.preventDefault();
+  const editId = $("docEditId").value;
+  const payload = { username: $("docUsername").value.trim(), full_name: $("docFullName").value.trim() };
+  if ($("docPassword").value) payload.password = $("docPassword").value;
+  if (!editId) {
+    if (!payload.password) { flash($("docAlert"), "Informe a senha do paciente.", "err"); return; }
+    payload.icr = Number($("docIcr").value) || 8;
+    payload.isf = Number($("docIsf").value) || 40;
+    payload.target_glucose = Number($("docTarget").value) || 100;
+  }
+  const { ok, data } = editId
+    ? await api(`/api/doctor/patients/${editId}`, jsonOpts("PUT", payload))
+    : await api("/api/doctor/patients", jsonOpts("POST", payload));
+  if (!ok) { flash($("docAlert"), data.error, "err"); return; }
+  flash($("docAlert"), data.message, "ok");
+  resetDocForm();
+  await loadDoctorPatients();
+  if (isAdm()) await loadAdminUsers();
+  if (!activePatientId && doctorPatients.length) activePatientId = doctorPatients[0].id;
+  fillActivePatientSelect();
+  if (!isAdm()) loadChatContacts(false);
+  loadCurrentDataset();
+};
+
+async function docDeletePatient(id) {
+  const p = doctorPatients.find(x => x.id === id);
+  if (!confirm(`Excluir o paciente "${p ? (p.full_name || p.username) : id}" e todo o seu histórico?`)) return;
+  const { ok, data } = await api(`/api/doctor/patients/${id}`, { method: "DELETE" });
+  if (!ok) { alert(data.error); return; }
+  doctorPatients = data.patients || [];
+  renderDoctorPatients();
+  if (isAdm()) await loadAdminUsers();
+  if (activePatientId === id) activePatientId = doctorPatients.length ? doctorPatients[0].id : null;
+  fillActivePatientSelect();
+  if (!isAdm()) loadChatContacts(false);
+  loadCurrentDataset();
+}
+
+// Relógio em tempo real da medição manual
+function toLocalInputValue(d) {
+  const p = n => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+}
+function tickClock() { if ($("chkLiveClock").checked) $("manualTimestamp").value = toLocalInputValue(new Date()); }
+function setClockLive(live) {
+  $("chkLiveClock").checked = live;
+  $("clockPill").textContent = live ? "Ao vivo" : "Horário manual";
+  $("clockPill").classList.toggle("paused", !live);
+  if (live) tickClock();
+}
+$("chkLiveClock").onchange = e => setClockLive(e.target.checked);
+["focus", "input", "keydown"].forEach(ev => $("manualTimestamp").addEventListener(ev, () => { if ($("chkLiveClock").checked) setClockLive(false); }));
+
+// Carregamento e preenchimento dos dados do perfil em foco
+async function loadCurrentDataset() {
+  $("headerSimpleSync").textContent = "Sincronizando...";
+  const { ok, data } = await api("/api/dataset/current" + patientQS());
+  $("headerSimpleSync").textContent = ok ? "Sincronizado" : "Offline";
+  if (!ok) return;
+  if (data.status === "no_patient_selected") {
+    currentData = null;
+    $("activePatientName").textContent = "Nenhum paciente";
+    return;
+  }
+  render(data);
+}
+
+function render(d) {
+  currentData = d;
+  const target = d.target_user || currentUser;
+  $("activePatientName").textContent = `${target.full_name || target.username} (#${target.id}) — ${ROLE_LABEL[target.role] || target.role}`;
+
+  updateDbStatsDisplay(d.db_stats);
+  renderManualHistoryTable(d.manual_history || []);
+  renderPredictionLogsTable(d.prediction_logs || []);
+  updateProfileFields(d.metabolic_profile);
+  renderDietLogs(d.diet_logs || []);
+  renderPredictionCards(d.model);
+  if (!isPaciente()) renderDoctorAiSummary(d.model);
+  if (d.model && d.model.latest_glucose) $("bolusCurrentGlucose").value = Math.round(d.model.latest_glucose);
+  if (isAdm() && d.model && d.model.model_rows) $("statGlobalModel").textContent = `${Number(d.model.model_rows).toLocaleString("pt-BR")} amostras`;
+
+  if (isAdm() && d.model) {
+    $("models").innerHTML = (d.model.metrics || []).map(x => `<tr><td><b>${esc(x.model)}</b></td><td>${f(x.MAE)}</td><td>${f(x.RMSE)}</td><td>${f(x.R2)}</td>
+      <td><code style="font-size:11px;">${esc(JSON.stringify(x.hyperparameters || {}))}</code></td></tr>`).join("") || `<tr><td colspan="5" class="muted">Modelos globais ainda não treinados.</td></tr>`;
+    $("best").textContent = "Melhor modelo (menor MAE): " + (d.model.best || "—");
+    $("imp").innerHTML = (d.model.importance || []).map(x => `<tr><td><code>${esc(x.feature)}</code></td><td>${f(x.importance)}</td></tr>`).join("");
+    renderPersonalizedReport(d.model.personalized);
+  }
+
+  const c = d.clinical || {};
+  const hasClinical = !(d.status === "empty" || !d.clinical);
+  const cards = [
+    ["Média", hasClinical ? f(c.mean) + " mg/dL" : "—"],
+    ["TIR (alvo)", hasClinical ? f(c.tir) + "%" : "—"],
+    ["TAR (>180)", hasClinical ? f(c.tar) + "%" : "—"],
+    ["TBR (<70)", hasClinical ? f(c.tbr) + "%" : "—"],
+    ["CV", hasClinical ? f(c.cv) + "%" : "—"],
+    ["GMI", hasClinical ? f(c.gmi) + "%" : "—"],
+    ["Leituras", hasClinical ? Number(c.n).toLocaleString("pt-BR") : "0"],
+    ["Cobertura", hasClinical ? f(c.coverage || 0) + "%" : "0.00%"]
+  ];
+  $("cards").innerHTML = cards.map(x => `<div class="metric"><small>${x[0]}</small><b>${x[1]}</b></div>`).join("");
+
+  if (!hasClinical) {
+    $("emptyUserNotice").classList.remove("hidden");
+    $("emptyUserName").textContent = target.full_name || target.username;
+    $("datasetBadge").classList.add("hidden");
+    $("quality").textContent = "Sem leituras suficientes neste perfil para gerar métricas de qualidade.";
+    $("sessions").textContent = "";
+    $("daySelect").innerHTML = "";
+    ["dayMean", "dayTIR", "dayMinMax", "dayTAR", "dayTBR", "dayCount"].forEach(id => $(id).textContent = "—");
+    if (chart) { chart.destroy(); chart = null; }
+    return;
+  }
+
+  $("emptyUserNotice").classList.add("hidden");
+
+  const q = d.quality;
+  if (q) {
+    $("quality").innerHTML = `<b>Período:</b> ${fmtDate(q.start)} → ${fmtDate(q.end)}<br>
+      <b>Duração:</b> ${f(q.span_days)} dias | <b>Intervalo mediano:</b> ${f(q.median_interval_min)} min | <b>Maior lacuna:</b> ${f(q.max_gap_min)} min | <b>Lacunas &gt; 22,5 min:</b> ${q.n_gaps_gt_22_5min}`;
+    $("sessions").innerHTML = `<b>Sessões contínuas detectadas:</b> ${q.n_sessions}`;
+  } else if (d.sessions && d.sessions.length) {
+    $("quality").textContent = "Indicadores de cobertura e sessões de sensor do paciente.";
+    $("sessions").innerHTML = `<b>Sessões de sensor:</b> ${d.sessions.length}`;
+  }
+
+  const sel = $("daySelect");
+  sel.innerHTML = "";
+  if (d.available_days && d.available_days.length) {
+    d.available_days.forEach(k => {
+      const dd = d.daily_history[k];
+      sel.add(new Option(`${formatDayLabel(k)} — ${dd.readings_count} leituras (${dd.coverage_pct}%)`, k));
+    });
+    currentDay = d.available_days[d.available_days.length - 1];
+    if (currentView === "daily") renderDailyChart(currentDay); else renderFullChart();
+  } else renderFullChart();
+
+  $("datasetBadge").classList.remove("hidden");
+  $("datasetSummary").textContent = `${(d.sources && d.sources.length) ? d.sources.join(", ") : (d.file || "Base do paciente")} — ${Number(d.total_accumulated_rows || c.n).toLocaleString("pt-BR")} leituras (${(d.available_days || []).length} dias)`;
+}
+
+function renderPersonalizedReport(p) {
+  if (!p || !p.exists) { $("persReport").innerHTML = `<p class="muted">Modelo personalizado ainda não criado para este perfil (requer leituras suficientes).</p>`; return; }
+  const ms = p.metrics_summary || {};
+  const kv = obj => Object.entries(obj || {}).map(([k, v]) => `<span class="db-chip">${esc(k)}: <b>${esc(typeof v === "number" ? v.toFixed(4) : JSON.stringify(v))}</b></span>`).join(" ");
+  $("persReport").innerHTML = `
+    <div class="db-stats-chips">
+      <span class="db-chip">Arquivo: <b>${esc(p.model_file)}</b></span>
+      <span class="db-chip">Passos incrementais: <b>${p.incremental_steps}</b></span>
+      <span class="db-chip">Amostras locais: <b>${p.n_local_samples}</b></span>
+      <span class="db-chip">Atualizado: <b>${esc(p.updated_at || "—")}</b></span>
+    </div>
+    <h3>Métricas (personalizado vs global)</h3><div class="db-stats-chips">${kv(ms) || '<span class="muted">—</span>'}</div>
+    <h3>Blending +15 / +30</h3><div class="db-stats-chips">${kv(p.blend_15)} ${kv(p.blend_30)}</div>
+    <h3>Hiperparâmetros</h3><code style="font-size:11px; display:block; white-space:pre-wrap;">${esc(JSON.stringify(p.hyperparameters || {}, null, 1))}</code>
+    <h3>Pesos das features personalizadas</h3>
+    <table><thead><tr><th>Feature</th><th>Peso</th></tr></thead><tbody>${(p.personalized_feature_weights || []).slice(0, 12).map(w => `<tr><td><code>${esc(w.feature)}</code></td><td>${f(w.importance)}</td></tr>`).join("") || '<tr><td colspan="2" class="muted">—</td></tr>'}</tbody></table>`;
+}
+
+function renderDoctorAiSummary(model) {
+  const p = model && model.personalized;
+  $("doctorAiSummary").innerHTML = `<h2>IA personalizada do paciente</h2>
+    <p>${p && p.exists ? `Modelo individual ativo — <b>${p.incremental_steps}</b> ajustes contínuos com <b>${p.n_local_samples}</b> amostras locais (atualizado em ${esc(p.updated_at || "—")}).`
+      : "Ainda sem modelo individual: as previsões usam o modelo base global até haver leituras suficientes."}</p>`;
+}
+
+// Cards de previsão (+15 / +30) e confirmação manual
+function renderPredictionCards(model) {
+  activePredictionLog = model ? model.active_prediction_log : null;
+  $("p15").textContent = model && model.prediction_15m != null ? f(model.prediction_15m) : "—";
+  $("p30").textContent = model && model.prediction_30m != null ? f(model.prediction_30m) : "—";
+  $("p15Model").textContent = (model && model.model_15_label) || "—";
+  $("p30Model").textContent = (model && model.model_30_label) || "—";
+  updateConfirmVisuals();
+}
+
+function updateConfirmVisuals() {
+  [[15, "cardPred15", "cta15"], [30, "cardPred30", "cta30"]].forEach(([h, card, cta]) => {
+    const confirmed = !!(activePredictionLog && activePredictionLog["confirmed_" + h + "m"]);
+    $(card).classList.toggle("confirmed-exact", confirmed);
+    $(cta).textContent = !activePredictionLog ? "Sem previsão ativa" : (confirmed ? "Previsão exata confirmada" : "Marcar como exata");
+  });
+}
+
+async function sendPredictionFeedback(predictionId, horizon, confirmed) {
+  const { ok, data } = await api("/api/prediction/feedback", jsonOpts("POST", { prediction_id: predictionId, horizon, confirmed }));
+  if (!ok) { flash($("manualStatus"), data.error, "err"); return; }
+  flash($("manualStatus"), data.message, "ok");
+  if (data.updated_log && activePredictionLog && data.updated_log.id === activePredictionLog.id) activePredictionLog = data.updated_log;
+  else if (activePredictionLog && activePredictionLog.id === predictionId) activePredictionLog["confirmed_" + horizon + "m"] = confirmed;
+  updateConfirmVisuals();
+  renderPredictionLogsTable(data.prediction_logs || []);
+}
+
+function onPredCardClick(h) {
+  if (!activePredictionLog || !activePredictionLog.id) { flash($("manualStatus"), "Registre uma leitura para gerar uma previsão.", "warn"); return; }
+  sendPredictionFeedback(activePredictionLog.id, h, !activePredictionLog["confirmed_" + h + "m"]);
+}
+[["cardPred15", 15], ["cardPred30", 30]].forEach(([id, h]) => {
+  $(id).onclick = () => onPredCardClick(h);
+  $(id).onkeydown = e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onPredCardClick(h); } };
+});
+
+// Registro manual, edição e exclusão de leituras
+$("btnPredict").onclick = async () => {
+  const g0 = Number($("g0").value);
+  if (!g0 || g0 < 20 || g0 > 600) { flash($("manualStatus"), "Informe a glicose atual entre 20 e 600 mg/dL.", "err"); return; }
+  const ts = $("chkLiveClock").checked ? toLocalInputValue(new Date()) : $("manualTimestamp").value;
+  if (!ts) { flash($("manualStatus"), "Informe a data e o horário da medição.", "err"); return; }
+  const fd = new FormData();
+  fd.append("current", g0);
+  fd.append("timestamp", ts.replace("T", " ") + (ts.length === 16 ? ":00" : ""));
+  if ($("g15").value) fd.append("glucose_15", $("g15").value);
+  if ($("g30").value) fd.append("glucose_30", $("g30").value);
+  if (!isPaciente() && activePatientId) fd.append("patient_id", activePatientId);
+  $("btnPredict").disabled = true;
+  flash($("manualStatus"), "Registrando e calculando previsão personalizada...", "info", 0);
+  const { ok, data } = await api("/api/manual/predict", { method: "POST", body: fd });
+  $("btnPredict").disabled = false;
+  if (!ok) { flash($("manualStatus"), data.error, "err"); return; }
+  flash($("manualStatus"), `Leitura de ${f0(g0)} mg/dL registrada. Previsões: +15 min ${f(data.prediction_15m)} | +30 min ${f(data.prediction_30m)} mg/dL.`, "ok", 8000);
+  $("g0").value = ""; $("g15").value = ""; $("g30").value = "";
+  await loadCurrentDataset();
+  if (data.active_prediction_log) {
+    renderPredictionCards({ ...(currentData ? currentData.model : {}), active_prediction_log: data.active_prediction_log,
+      prediction_15m: data.prediction_15m, prediction_30m: data.prediction_30m, model_15_label: data.model_15, model_30_label: data.model_30 });
+  }
+};
+
+function renderManualHistoryTable(history) {
+  const el = $("manualHistory");
+  if (!history.length) { el.innerHTML = `<p class="muted">Nenhuma leitura manual registrada.</p>`; return; }
+  el.innerHTML = `<table><thead><tr><th>ID</th><th>Data/hora da medição</th><th>Glicose</th><th>Gravado em</th><th>Ações</th></tr></thead><tbody>
+    ${history.map(i => `<tr>
+      <td>#${i.id}</td><td><b>${fmtDate(i.timestamp)}</b></td>
+      <td><span style="font-weight:700; color:#1e40af;">${f0(i.glucose)} mg/dL</span></td>
+      <td class="muted">${fmtDate(i.created_at)}</td>
+      <td style="white-space:nowrap;"><button class="btn-secondary btn-sm" onclick="openEditReading(${i.id})">Editar</button>
+      <button class="btn-danger btn-sm" onclick="deleteManualReading(${i.id})">Excluir</button></td></tr>`).join("")}
+  </tbody></table>`;
+}
+
+function openEditReading(id) {
+  const item = (currentData && currentData.manual_history || []).find(x => x.id === id);
+  if (!item) return;
+  editingReadingId = id;
+  const [datePart, timePart = "00:00:00"] = String(item.timestamp).replace("T", " ").split(" ");
+  $("editReadingIdLbl").textContent = "#" + id;
+  $("editGlucose").value = Math.round(item.glucose);
+  $("editDate").value = datePart;
+  $("editTime").value = timePart.slice(0, 8);
+  $("editReadingAlert").classList.add("hidden");
+  $("editReadingModal").classList.remove("hidden");
+  $("editGlucose").focus();
+}
+function closeEditReading() { $("editReadingModal").classList.add("hidden"); editingReadingId = null; }
+$("btnEditCancel").onclick = closeEditReading;
+$("editReadingModal").onclick = e => { if (e.target === $("editReadingModal")) closeEditReading(); };
+document.addEventListener("keydown", e => { if (e.key === "Escape" && !$("editReadingModal").classList.contains("hidden")) closeEditReading(); });
+
+$("btnEditSave").onclick = async () => {
+  const g = Number($("editGlucose").value);
+  const date = $("editDate").value;
+  let time = $("editTime").value;
+  if (!g || g < 20 || g > 600 || !date || !time) { $("editReadingAlert").textContent = "Preencha glicose (20–600), data e hora válidas."; $("editReadingAlert").classList.remove("hidden"); return; }
+  if (time.length === 5) time += ":00";
+  const { ok, data } = await api(`/api/manual/reading/${editingReadingId}`, jsonOpts("PUT", { glucose: g, timestamp: `${date} ${time}` }));
+  if (!ok) { $("editReadingAlert").textContent = data.error; $("editReadingAlert").classList.remove("hidden"); return; }
+  closeEditReading();
+  flash($("manualStatus"), data.message, "ok");
+  loadCurrentDataset();
+};
+
+async function deleteManualReading(id) {
+  if (!confirm(`Excluir a leitura #${id}?`)) return;
+  const { ok, data } = await api(`/api/manual/reading/${id}`, { method: "DELETE" });
+  if (!ok) { flash($("manualStatus"), data.error, "err"); return; }
+  flash($("manualStatus"), data.message, "ok");
+  loadCurrentDataset();
+}
+
+function renderPredictionLogsTable(logs) {
+  const el = $("predictionLogsList");
+  if (!logs.length) { el.innerHTML = `<p class="muted">Nenhuma previsão registrada.</p>`; return; }
+  const errPill = (actual, err) => {
+    if (actual == null) return `<span class="muted">Aguardando</span>`;
+    const cls = err <= 15 ? "error-good" : (err <= 30 ? "error-fair" : "error-high");
+    return `${f0(actual)} <span class="error-pill ${cls}">±${f0(err)}</span>`;
+  };
+  const btn = (log, h) => {
+    const c = log["confirmed_" + h + "m"];
+    return `<button class="btn-sm ${c ? "btn-success" : "btn-secondary"}" onclick="sendPredictionFeedback(${log.id}, ${h}, ${!c})" title="${c ? "Remover confirmação" : "Confirmar como exata"}">${c ? "Exata" : "Confirmar"}</button>`;
+  };
+  el.innerHTML = `<table><thead><tr><th>Registro</th><th>Atual</th><th>Prev. +15</th><th>Real +15</th><th>+15</th><th>Prev. +30</th><th>Real +30</th><th>+30</th><th>Confirmado por</th></tr></thead><tbody>
+    ${logs.map(l => `<tr>
+      <td>${fmtDate(l.timestamp)}</td><td><b>${f0(l.current_glucose)}</b></td>
+      <td>${f(l.pred_15m)}</td><td>${errPill(l.actual_15m, l.error_15m)}</td><td>${btn(l, 15)}</td>
+      <td>${f(l.pred_30m)}</td><td>${errPill(l.actual_30m, l.error_30m)}</td><td>${btn(l, 30)}</td>
+      <td class="muted" style="font-size:12px;">${esc(l.confirmed_by || "—")}</td></tr>`).join("")}
+  </tbody></table>`;
+}
+
+// Importação e exportação de CSV
+$("file").onchange = e => { const n = e.target.files.length; $("fileChosen").textContent = n ? `${n} arquivo(s): ${[...e.target.files].map(x => x.name).join(", ")}` : "Nenhum arquivo selecionado"; };
+
+$("uploadForm").onsubmit = async (e) => {
+  e.preventDefault();
+  const files = $("file").files;
+  if (!files.length) { flash($("uploadStatus"), "Selecione ao menos um arquivo CSV.", "err"); return; }
+  const fd = new FormData();
+  [...files].forEach(x => fd.append("files", x));
+  fd.append("low", $("low").value || 70);
+  fd.append("high", $("high").value || 180);
+  fd.append("cumulative", $("cumulative").checked);
+  if (!isPaciente() && activePatientId) fd.append("patient_id", activePatientId);
+  $("btnUpload").disabled = true;
+  flash($("uploadStatus"), "Processando arquivos e recalibrando a IA...", "info", 0);
+  const { ok, data } = await api("/api/analyze", { method: "POST", body: fd });
+  $("btnUpload").disabled = false;
+  if (!ok) { flash($("uploadStatus"), data.error, "err", 10000); return; }
+  flash($("uploadStatus"), "Arquivos importados com sucesso.", "ok");
+  $("file").value = ""; $("fileChosen").textContent = "Nenhum arquivo selecionado";
+  render(data);
+  if (isAdm()) { loadAdminUsers(); loadDoctorPatients(); }
+  if (isMedico()) loadDoctorPatients();
+};
+
+$("btnExportCons").onclick = () => { window.location.href = "/api/export/consolidated" + patientQS(); };
+
+// Gráficos do histórico glicêmico
+function updateDayMetrics(dd) {
+  $("dayMean").textContent = f(dd.mean) + " mg/dL";
+  $("dayTIR").textContent = f(dd.tir) + "%";
+  $("dayMinMax").textContent = `${f0(dd.min)} / ${f0(dd.max)}`;
+  $("dayTAR").textContent = f(dd.tar) + "%";
+  $("dayTBR").textContent = f(dd.tbr) + "%";
+  $("dayCount").textContent = `${dd.readings_count} / 96`;
+}
+
+function renderDailyChart(dayKey) {
+  if (!currentData || !currentData.daily_history || !currentData.daily_history[dayKey]) return;
+  const dd = currentData.daily_history[dayKey];
+  currentDay = dayKey;
+  $("daySelect").value = dayKey;
+  updateDayMetrics(dd);
+  const idx = currentData.available_days.indexOf(dayKey);
+  $("prevDayBtn").disabled = idx <= 0;
+  $("nextDayBtn").disabled = idx >= currentData.available_days.length - 1;
+  const low = Number(currentData.low || 70), high = Number(currentData.high || 180);
+  if (chart) chart.destroy();
+  chart = new Chart($("chart"), {
+    type: "line",
+    data: {
+      labels: TIME_SLOTS_15M,
+      datasets: [
+        { label: "Glicose (mg/dL)", data: dd.values, borderColor: "#2563eb", backgroundColor: "rgba(37,99,235,0.08)", fill: true, tension: 0.25, pointRadius: 3,
+          pointBackgroundColor: ctx => ctx.raw == null ? "#2563eb" : (ctx.raw < low ? "#ef4444" : (ctx.raw > high ? "#f59e0b" : "#10b981")), spanGaps: false },
+        { label: `Limite superior (${high})`, data: Array(96).fill(high), borderColor: "#f59e0b", borderDash: [5, 5], borderWidth: 1.5, pointRadius: 0, fill: false },
+        { label: `Limite inferior (${low})`, data: Array(96).fill(low), borderColor: "#ef4444", borderDash: [5, 5], borderWidth: 1.5, pointRadius: 0, fill: false }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false, interaction: { mode: "index", intersect: false },
+      plugins: { tooltip: { callbacks: { title: items => `${formatDayLabel(dayKey)} às ${TIME_SLOTS_15M[items[0].dataIndex]}` } } },
+      scales: {
+        x: { ticks: { autoSkip: false, callback: (v, i) => (i % 8 === 0 || i === 95) ? TIME_SLOTS_15M[i] : "" } },
+        y: { suggestedMin: 40, suggestedMax: 250, title: { display: true, text: "mg/dL" } }
+      }
+    }
+  });
+}
+
+function renderFullChart() {
+  if (!currentData || !currentData.history) return;
+  const h = currentData.history;
+  if (chart) chart.destroy();
+  chart = new Chart($("chart"), {
+    type: "line",
+    data: { labels: h.map(x => fmtDate(x.timestamp)), datasets: [{ label: "Glicose (mg/dL)", data: h.map(x => x.glucose), borderColor: "#2563eb", borderWidth: 1.5, pointRadius: 0 }] },
+    options: { responsive: true, maintainAspectRatio: false, scales: { x: { ticks: { maxTicksLimit: 12 } }, y: { title: { display: true, text: "mg/dL" } } } }
+  });
+}
+
+$("daySelect").onchange = e => renderDailyChart(e.target.value);
+$("prevDayBtn").onclick = () => { if (!currentData || !currentData.available_days) return; const i = currentData.available_days.indexOf(currentDay); if (i > 0) renderDailyChart(currentData.available_days[i - 1]); };
+$("nextDayBtn").onclick = () => { if (!currentData || !currentData.available_days) return; const i = currentData.available_days.indexOf(currentDay); if (i < currentData.available_days.length - 1) renderDailyChart(currentData.available_days[i + 1]); };
+$("viewDailyBtn").onclick = () => {
+  currentView = "daily";
+  $("viewDailyBtn").classList.add("active"); $("viewFullBtn").classList.remove("active");
+  $("dailyControls").classList.remove("hidden");
+  $("chartTitle").textContent = "Histórico diário (intervalos de 15 min)";
+  if (currentDay) renderDailyChart(currentDay);
+};
+$("viewFullBtn").onclick = () => {
+  currentView = "full";
+  $("viewFullBtn").classList.add("active"); $("viewDailyBtn").classList.remove("active");
+  $("dailyControls").classList.add("hidden");
+  $("chartTitle").textContent = "Histórico completo (últimas 500 leituras)";
+  renderFullChart();
+};
+
+// Parâmetros metabólicos do paciente
+function updateProfileFields(p) {
+  if (!p) return;
+  $("profIcr").value = p.icr ?? 8;
+  $("profIsf").value = p.isf ?? 40;
+  $("profTarget").value = p.target_glucose ?? 100;
+  $("profNotes").value = p.clinical_notes || "";
+  $("profileUpdatedInfo").textContent = p.updated_by ? `Última atualização por ${p.updated_by} em ${fmtDate(p.updated_at)}` : "Definidas pelo médico responsável";
+  updateExcursionRatio();
+}
+function updateExcursionRatio() {
+  const icr = Number($("profIcr").value), isf = Number($("profIsf").value);
+  if (icr > 0 && isf > 0) $("lblExcursionRatio").textContent = `${(isf / icr).toFixed(1)} mg/dL`;
+}
+$("profIcr").oninput = $("profIsf").oninput = updateExcursionRatio;
+
+$("btnSaveProfile").onclick = async () => {
+  const icr = Number($("profIcr").value), isf = Number($("profIsf").value), target = Number($("profTarget").value);
+  if (!(icr > 0) || !(isf > 0) || !(target >= 50 && target <= 300)) { flash($("profileAlert"), "Valores inválidos de ICR, ISF ou glicose alvo.", "err"); return; }
+  const target_user = currentData && currentData.target_user;
+  const { ok, data } = await api("/api/patient/profile", jsonOpts("POST", {
+    patient_id: target_user ? target_user.id : activePatientId, icr, isf, target_glucose: target, clinical_notes: $("profNotes").value
+  }));
+  if (!ok) { flash($("profileAlert"), data.error, "err"); return; }
+  updateProfileFields(data.profile);
+  flash($("profileAlert"), data.message, "ok");
+};
+
+// Análise nutricional (Gemini), cálculo de bolus e revisão médica
+const DIET_EXAMPLES = {
+  breakfast: "Café da manhã: 2 fatias de pão integral (50g) com queijo minas (30g) e 1 xícara de café com leite desnatado (200ml) sem açúcar. Opção 2: omelete de 2 ovos com espinafre + 1 fatia de mamão (100g) com aveia.",
+  lunch: "Almoço: 4 colheres de sopa de arroz integral (100g), 1 concha de feijão (100g), 1 filé de frango grelhado (120g) e salada com azeite. Opção 2: macarrão penne integral (140g) com carne moída magra e salada verde.",
+  lowgi: "Jantar low-carb: 1 filé de salmão grelhado (120g), 1 batata-doce média (120g) e brócolis no vapor. Opção 2: sopa de legumes com frango desfiado."
+};
+document.querySelectorAll("[data-example]").forEach(b => b.onclick = () => $("dietTextInput").value = DIET_EXAMPLES[b.dataset.example]);
+
+$("dietFileInput").onchange = e => {
+  const file = e.target.files[0];
+  $("dietFileChosenText").textContent = file ? `${file.name} (${(file.size / 1024).toFixed(1)} KB)` : "Clique para selecionar ou arraste o arquivo";
+  $("btnClearDietFile").classList.toggle("hidden", !file);
+};
+$("btnClearDietFile").onclick = () => { $("dietFileInput").value = ""; $("dietFileInput").onchange({ target: { files: [] } }); };
+
+$("btnAnalyzeDiet").onclick = async () => {
+  const text = $("dietTextInput").value.trim();
+  const file = $("dietFileInput").files[0];
+  if (!text && !file) { flash($("dietStatusAlert"), "Descreva a refeição ou anexe um arquivo.", "warn"); return; }
+  const fd = new FormData();
+  if (text) fd.append("diet_text", text);
+  if (file) fd.append("file", file);
+  if (!isPaciente() && activePatientId) fd.append("patient_id", activePatientId);
+  $("btnAnalyzeDiet").disabled = true;
+  $("btnAnalyzeDietText").textContent = "Analisando...";
+  flash($("dietStatusAlert"), "Processando com Google Gemini...", "info", 0);
+  const { ok, data } = await api("/api/diet/analyze", { method: "POST", body: fd });
+  $("btnAnalyzeDiet").disabled = false;
+  $("btnAnalyzeDietText").textContent = "Analisar dieta com Gemini";
+  if (!ok) { flash($("dietStatusAlert"), data.error, "err", 0); return; }
+  const meals = (data.data && data.data.refeicoes) || [];
+  if (data.status === "warning") flash($("dietStatusAlert"), data.message, "warn", 0);
+  else flash($("dietStatusAlert"), `${meals.length} refeição(ões) identificada(s).`, "ok", 0);
+  extractedMealsData = meals;
+  renderMealsCards(meals);
+  if (data.diet_logs) renderDietLogs(data.diet_logs);
+};
+
+function renderMealsCards(refeicoes) {
+  const wrap = $("dietResultsContainer");
+  if (!refeicoes.length) { wrap.classList.add("hidden"); return; }
+  wrap.classList.remove("hidden");
+  $("dietMealsList").innerHTML = refeicoes.map((ref, ri) => `
+    <div class="meal-block-card">
+      <div class="meal-header-strip"><span class="meal-time-tag">${esc(ref.horario || "12:00")}</span><b>${esc(ref.nome_refeicao)}</b></div>
+      <div class="options-list">${(ref.opcoes || []).map((o, oi) => {
+        const gi = o.indice_glicemico_estimado || "Médio";
+        const giCls = gi === "Baixo" ? "tag-gi-baixo" : (gi === "Alto" ? "tag-gi-alto" : "tag-gi-medio");
+        return `<div class="option-item-card" id="optCard_${ri}_${oi}" onclick="selectMealOption(${ri}, ${oi})">
+          <div><b>Opção ${oi + 1}:</b> ${esc(o.descricao)}</div>
+          <div class="nutrient-tags-row">
+            <span class="nutri-tag tag-carbs"><b>${f(o.carboidratos_g)}g</b> CHO</span>
+            <span class="nutri-tag tag-protein">${f(o.proteinas_g)}g prot</span>
+            <span class="nutri-tag tag-fat">${f(o.gorduras_g)}g gord</span>
+            <span class="nutri-tag tag-kcal">${f0(o.calorias_kcal)} kcal</span>
+            <span class="nutri-tag ${giCls}">IG ${esc(gi)}</span>
+          </div></div>`;
+      }).join("")}</div>
+    </div>`).join("");
+}
+
+function selectMealOption(ri, oi) {
+  document.querySelectorAll(".option-item-card").forEach(el => el.classList.remove("selected-option"));
+  const card = $(`optCard_${ri}_${oi}`); if (card) card.classList.add("selected-option");
+  const meal = extractedMealsData[ri]; if (!meal) return;
+  const opt = (meal.opcoes || [])[oi]; if (!opt) return;
+  $("bolusCarbs").value = opt.carboidratos_g;
+  if (meal.horario) $("bolusMealTime").value = meal.horario;
+  if (opt.indice_glicemico_estimado) $("bolusGlycemicIndex").value = opt.indice_glicemico_estimado;
+  $("bolusCalcCard").dataset.mealSummary = `${meal.nome_refeicao}: ${opt.descricao}`;
+  if (!$("bolusCurrentGlucose").value) syncLatestGlucoseToBolus();
+  calculateMetabolicBolus();
+  $("bolusCalcCard").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function syncLatestGlucoseToBolus() {
+  const lg = currentData && currentData.model && currentData.model.latest_glucose;
+  $("bolusCurrentGlucose").value = lg ? Math.round(lg) : 110;
+}
+$("btnSyncCurrentGlucose").onclick = syncLatestGlucoseToBolus;
+
+async function calculateMetabolicBolus() {
+  const carbs = Number($("bolusCarbs").value), glucose = Number($("bolusCurrentGlucose").value);
+  if (isNaN(carbs) || carbs < 0 || $("bolusCarbs").value === "") { flash($("bolusStatusAlert"), "Informe os carboidratos (g).", "warn"); return; }
+  if (!(glucose >= 20 && glucose <= 600)) { flash($("bolusStatusAlert"), "Informe a glicose atual (20–600 mg/dL).", "warn"); return; }
+  const icr = Number($("profIcr").value) || 8, isf = Number($("profIsf").value) || 40, target = Number($("profTarget").value) || 100;
+  const { ok, data } = await api("/api/metabolic/calculate", jsonOpts("POST", {
+    patient_id: (!isPaciente() && activePatientId) ? activePatientId : null,
+    carbs_g: carbs, current_glucose: glucose, horario: $("bolusMealTime").value || "12:30",
+    glycemic_index: $("bolusGlycemicIndex").value, icr, isf, target_glucose: target,
+    take_bolus: $("chkApplyBolusSim").checked, meal_summary: $("bolusCalcCard").dataset.mealSummary || ""
+  }));
+  if (!ok) { flash($("bolusStatusAlert"), data.error, "err"); return; }
+  $("bolusStatusAlert").classList.add("hidden");
+  const b = data.bolus, pp = data.patient_profile || { icr, isf, target_glucose: target };
+  $("dispBolusCho").textContent = f(b.bolus_cho);
+  $("dispBolusCorr").textContent = f(b.bolus_correction);
+  $("dispBolusTotal").textContent = f(b.bolus_total);
+  $("dispBolusChoFormula").textContent = `${carbs} g ÷ ${pp.icr} (ICR) = ${b.bolus_cho} UI`;
+  $("dispBolusCorrFormula").textContent = b.bolus_correction > 0 ? `(${glucose} − ${pp.target_glucose}) ÷ ${pp.isf} = ${b.bolus_correction} UI` : `Glicose ≤ alvo → 0 UI`;
+  $("dispBolusTotalFormula").textContent = `${b.bolus_cho} + ${b.bolus_correction} = ${b.bolus_total} UI`;
+  const n = $("dispBolusAlert");
+  n.classList.remove("hidden");
+  n.innerHTML = `<b>${esc(b.status_glicemico)}:</b> ${esc(b.alerta_clinico)}`;
+  const c = b.status_glicemico === "Hipoglicemia" ? ["#fef2f2", "#991b1b"] : (b.status_glicemico === "Hiperglicemia" ? ["#fffbeb", "#92400e"] : ["#f0fdf4", "#166534"]);
+  n.style.background = c[0]; n.style.color = c[1];
+  if (data.simulation) renderDietCurveChart(data.simulation);
+  if (data.diet_logs) renderDietLogs(data.diet_logs);
+  delete $("bolusCalcCard").dataset.mealSummary;
+}
+$("btnCalculateBolus").onclick = calculateMetabolicBolus;
+
+function renderDietCurveChart(sim) {
+  if (dietCurveChartInstance) dietCurveChartInstance.destroy();
+  const labels = sim.labels || ["0 min", "+15 min", "+30 min", "+45 min", "+60 min"];
+  dietCurveChartInstance = new Chart($("dietCurveChart"), {
+    type: "line",
+    data: {
+      labels,
+      datasets: [
+        { label: "Sem insulina", data: sim.curve_no_insulin, borderColor: "#ef4444", borderDash: [6, 4], borderWidth: 2.5, tension: 0.35, fill: false },
+        { label: `Com bolus (${sim.bolus_applied} UI)`, data: sim.curve_with_bolus, borderColor: "#2563eb", backgroundColor: "rgba(37,99,235,0.12)", borderWidth: 3, tension: 0.35, fill: true },
+        { label: "Glicose alvo", data: sim.target_glucose_line, borderColor: "#10b981", borderDash: [4, 4], pointRadius: 0, fill: false },
+        { label: "180 mg/dL", data: Array(labels.length).fill(sim.target_high || 180), borderColor: "#f59e0b", borderDash: [3, 3], borderWidth: 1.2, pointRadius: 0, fill: false },
+        { label: "70 mg/dL", data: Array(labels.length).fill(sim.target_low || 70), borderColor: "#dc2626", borderDash: [3, 3], borderWidth: 1.2, pointRadius: 0, fill: false }
+      ]
+    },
+    options: { responsive: true, maintainAspectRatio: false, interaction: { mode: "index", intersect: false }, scales: { y: { suggestedMin: 50, suggestedMax: 260, title: { display: true, text: "mg/dL" } } } }
+  });
+}
+
+function renderDietLogs(logs) {
+  const el = $("dietLogsTable");
+  if (!logs.length) { el.innerHTML = `<p class="muted">Nenhuma refeição registrada.</p>`; return; }
+  const canReview = isMedico() || isAdm();
+  el.innerHTML = `<table><thead><tr><th>Data</th><th>Horário</th><th>Refeição</th><th>CHO</th><th>IG</th><th>Bolus</th><th>Parecer médico</th></tr></thead><tbody>
+    ${logs.map(l => `<tr>
+      <td class="muted" style="font-size:12px;">${fmtDate(l.created_at)}</td><td>${esc(l.horario)}</td>
+      <td>${esc(l.meal_summary)}</td><td><b>${f(l.carbs_g)} g</b></td><td>${esc(l.glycemic_index || "—")}</td>
+      <td>${l.bolus_total != null ? f(l.bolus_total) + " UI" : "—"}</td>
+      <td style="min-width:220px;">${canReview
+        ? `<div style="display:flex; gap:4px;"><input type="text" id="dietNote_${l.id}" value="${esc(l.doctor_notes || "")}" placeholder="Escreva o parecer..." style="flex:1; padding:5px 8px; border:1px solid #cbd5e1; border-radius:6px;">
+           <button class="btn-success btn-sm" onclick="reviewDiet(${l.id})">Salvar</button></div>
+           ${l.reviewed_by ? `<small class="muted">por ${esc(l.reviewed_by)}</small>` : ""}`
+        : (l.doctor_notes ? `${esc(l.doctor_notes)}<br><small class="muted">— ${esc(l.reviewed_by || "Médico")}</small>` : `<span class="muted">Aguardando revisão</span>`)}</td>
+    </tr>`).join("")}</tbody></table>`;
+}
+
+async function reviewDiet(id) {
+  const notes = $("dietNote_" + id).value.trim();
+  const { ok, data } = await api(`/api/diet/logs/${id}/review`, jsonOpts("POST", { doctor_notes: notes }));
+  if (!ok) { alert(data.error); return; }
+  renderDietLogs(data.diet_logs || []);
+}
+
+// Mensagens diretas entre médico e paciente
+let chatContacts = [];
+async function loadChatContacts(autoOpen = true) {
+  if (isAdm()) return;
+  const { ok, data } = await api("/api/messages/contacts");
+  if (!ok) return;
+  chatContacts = data.contacts || [];
+  updateUnreadBadge(data.unread_total || 0);
+  if (isPaciente()) {
+    if (!chatContacts.length) {
+      $("chatPeerName").textContent = "Nenhum médico vinculado";
+      $("chatStream").innerHTML = `<p class="muted">Você ainda não está vinculado a um médico. Solicite o vínculo ao administrador.</p>`;
+      $("chatForm").classList.add("hidden");
+      return;
+    }
+    $("chatForm").classList.remove("hidden");
+    $("chatSubtitle").textContent = `— com ${chatContacts[0].full_name}`;
+    if (autoOpen || !chatPeerId) openChat(chatContacts[0].id);
+    return;
+  }
+  $("chatContacts").innerHTML = chatContacts.length ? chatContacts.map(c => `
+    <div class="chat-contact-item ${c.id === chatPeerId ? "active" : ""}" onclick="openChat(${c.id})">
+      <span>${esc(c.full_name)}</span>${c.unread ? `<span class="unread-pill">${c.unread}</span>` : ""}
+    </div>`).join("") : `<p class="muted" style="padding:8px;">Nenhum paciente na carteira.</p>`;
+  if (autoOpen && !chatPeerId) {
+    const first = chatContacts.find(c => c.id === activePatientId) || chatContacts[0];
+    if (first) openChat(first.id);
+  }
+}
+
+async function openChat(peerId) {
+  chatPeerId = peerId;
+  document.querySelectorAll(".chat-contact-item").forEach(el => el.classList.remove("active"));
+  await refreshChat();
+  clearInterval(chatPollTimer);
+  chatPollTimer = setInterval(refreshChat, 10000);
+  if (isMedico()) loadChatContacts(false);
+}
+
+async function refreshChat() {
+  if (!chatPeerId) return;
+  const { ok, data } = await api(`/api/messages/${chatPeerId}`);
+  if (!ok) { $("chatStream").innerHTML = `<p class="muted">${esc(data.error)}</p>`; return; }
+  $("chatPeerName").textContent = `${data.peer.full_name || data.peer.username}${data.peer.crm ? " • " + data.peer.crm : ""}`;
+  renderChatMessages(data.messages || []);
+  updateUnreadBadge(data.unread_total || 0);
+}
+
+function renderChatMessages(msgs) {
+  const s = $("chatStream");
+  const atBottom = s.scrollHeight - s.scrollTop - s.clientHeight < 40;
+  s.innerHTML = msgs.length ? msgs.map(m => `
+    <div class="chat-bubble ${m.sender_id === currentUser.id ? "mine" : "theirs"}">
+      ${esc(m.message).replace(/\n/g, "<br>")}
+      <span class="chat-bubble-meta">${esc(m.sender_name || "")} • ${fmtDate(m.timestamp)}${m.sender_id === currentUser.id ? (m.is_read ? " • Lida" : " • Enviada") : ""}</span>
+    </div>`).join("") : `<p class="muted">Nenhuma mensagem ainda. Envie a primeira!</p>`;
+  if (atBottom || msgs.length) s.scrollTop = s.scrollHeight;
+}
+
+$("chatForm").onsubmit = async (e) => {
+  e.preventDefault();
+  const text = $("chatInput").value.trim();
+  if (!text || !chatPeerId) return;
+  $("chatInput").value = "";
+  const { ok, data } = await api("/api/messages", jsonOpts("POST", { receiver_id: chatPeerId, message: text }));
+  if (!ok) { alert(data.error); $("chatInput").value = text; return; }
+  renderChatMessages(data.messages || []);
+};
+$("btnChatRefresh").onclick = refreshChat;
+
+// Inicialização da página
+window.addEventListener("DOMContentLoaded", () => {
+  setClockLive(true);
+  clockTimer = setInterval(tickClock, 1000);
+  updateAdmFormVisibility();
+  checkAuthAndInit();
+});
+</script>
+</body>
+</html>
