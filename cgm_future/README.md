@@ -1,4 +1,4 @@
-# TCC — CGM + IA (v3)
+# TCC — CGM + IA
 
 Protótipo em Python/FastAPI para analisar exportações CSV do FreeStyle Libre, calcular métricas glicêmicas e testar previsão de glicose 30 minutos à frente.
 
